@@ -55,6 +55,12 @@ install(FILES ${PROJECT_BINARY_DIR}/wirefile.pc
 
 if(WIREFILE_BUILD_TESTS)
     enable_testing()
+    add_executable(test_wirefile tests/test_wirefile.c)
+    target_link_libraries(test_wirefile PRIVATE wirefile)
+    add_test(NAME wirefile COMMAND test_wirefile)
+    add_executable(test_corpus tests/test_corpus.c)
+    target_link_libraries(test_corpus PRIVATE wirefile)
+    add_test(NAME corpus COMMAND test_corpus ${PROJECT_SOURCE_DIR}/tests/data)
     add_library(wirefile_header_check OBJECT tests/header_check.c)
     target_include_directories(wirefile_header_check PRIVATE include)
 endif()
