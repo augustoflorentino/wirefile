@@ -60,6 +60,10 @@ if(WIREFILE_BUILD_TESTS)
 endif()
 
 if(WIREFILE_BUILD_EXAMPLES)
+    foreach(example basic pcwdump pcwcopy)
+        add_executable(${example} examples/${example}.c)
+        target_link_libraries(${example} PRIVATE wirefile)
+    endforeach()
 endif()
 
 if(WIREFILE_BUILD_FUZZ)
