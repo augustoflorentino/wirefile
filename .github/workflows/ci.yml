@@ -1,0 +1,77 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        shared: [ON, OFF]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      PREFIX: ${{ github.workspace }}/prefix
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=${{ matrix.shared }} -DCMAKE_INSTALL_PREFIX="$PREFIX"
+      - run: cmake --build build --config Release
+      - run: cmake --install build --config Release
+      - run: cmake -S tests/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PREFIX"
+      - run: cmake --build build-consumer --config Release
+      - if: runner.os != 'Windows'
+        run: ./build-consumer/consumer
+      - if: runner.os == 'macOS'
+        run: command -v pkg-config || brew install pkgconf
+      - if: runner.os != 'Windows'
+        run: |
+          export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig"
+          cc examples/basic.c $(pkg-config --cflags --libs wirefile) -Wl,-rpath,"$PREFIX/lib" -o basic-pc
+          ./basic-pc
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake --preset dev
+      - run: cmake --build build/dev
+      - run: ctest --preset dev
+
+  msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake --preset msvc
+      - run: cmake --build build/msvc --config Debug
+      - run: ctest --test-dir build/msvc -C Debug --output-on-failure
+
+  abi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y abigail-tools
+      - run: cmake --preset abi
+      - run: cmake --build build/abi
+      - run: scripts/symbols.sh build/abi/libwirefile.so include/wirefile/wirefile.h
+      - run: scripts/abi.sh check build/abi/libwirefile.so
+
+  single-file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/amalgamate.sh
+      - run: cc -std=c11 -Wall -Wextra -Wpedantic -Werror -Idist tests/single_file.c -o single && ./single
+      - run: cc -std=c11 -Wall -Wextra -Wpedantic -Werror -DPCW_STATIC -Idist tests/single_file.c -o single-static && ./single-static
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake --preset fuzz
+      - run: cmake --build build/fuzz
+      - run: ./build/fuzz/fuzz_split -max_total_time=60

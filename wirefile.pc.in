@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: wirefile
+Description: @PROJECT_DESCRIPTION@
+Version: @PROJECT_VERSION@
+Requires:
+Requires.private:
+Libs: -L${libdir} -lwirefile
+Cflags: -I${includedir} @PC_CFLAGS@
