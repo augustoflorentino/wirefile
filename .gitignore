@@ -2,3 +2,4 @@ build/
 build-consumer/
 dist/
 prefix/
+compile_commands.json

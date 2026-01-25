@@ -8,7 +8,15 @@ option(WIREFILE_BUILD_FUZZ "Build libFuzzer targets" OFF)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-add_library(wirefile src/wirefile.c)
+add_library(wirefile
+    src/options.c
+    src/read_pcap.c
+    src/read_pcapng.c
+    src/reader.c
+    src/timestamp.c
+    src/util.c
+    src/write_formats.c
+    src/writer.c)
 add_library(wirefile::wirefile ALIAS wirefile)
 target_include_directories(wirefile PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -47,16 +55,11 @@ install(FILES ${PROJECT_BINARY_DIR}/wirefile.pc
 
 if(WIREFILE_BUILD_TESTS)
     enable_testing()
-    add_executable(test_wirefile tests/test_wirefile.c)
-    target_link_libraries(test_wirefile PRIVATE wirefile)
-    add_test(NAME wirefile COMMAND test_wirefile)
     add_library(wirefile_header_check OBJECT tests/header_check.c)
     target_include_directories(wirefile_header_check PRIVATE include)
 endif()
 
 if(WIREFILE_BUILD_EXAMPLES)
-    add_executable(wirefile_basic examples/basic.c)
-    target_link_libraries(wirefile_basic PRIVATE wirefile)
 endif()
 
 if(WIREFILE_BUILD_FUZZ)
