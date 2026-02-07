@@ -44,6 +44,8 @@ static inline int membuf_write(void *ctx, const unsigned char *data, size_t data
     membuf_t *buf = ctx;
     unsigned char *grown;
 
+    if (data_len == 0)
+        return 0;
     if (buf->len + data_len > buf->cap) {
         buf->cap = (buf->len + data_len) * 2;
         grown = realloc(buf->data, buf->cap);
