@@ -112,10 +112,25 @@ static int pcw_ng_idb(pcw_reader_t *reader, const unsigned char *body, size_t bo
     return PCW_OK;
 }
 
-static int pcw_ng_epb(pcw_reader_t *reader, const unsigned char *body, size_t body_len)
+static int pcw_ng_epb_packet(pcw_reader_t *reader, const unsigned char *body, size_t caplen)
 {
     pcw_block_t *block = &reader->block;
     uint32_t interface_id;
+    int status;
+
+    interface_id = block->type == PCW_BLOCK_PB ? pcw_rd16(body, reader->big_endian) : pcw_rd32(body, reader->big_endian);
+    status = pcw_ng_bind(reader, interface_id, pcw_ng_ts(reader, body + 4));
+    if (status != PCW_OK)
+        return status;
+    block->kind = PCW_KIND_PACKET;
+    block->orig_len = pcw_rd32(body + 16, reader->big_endian);
+    block->data = body + PCW_EPB_FIXED;
+    block->data_len = caplen;
+    return PCW_OK;
+}
+
+static int pcw_ng_epb(pcw_reader_t *reader, const unsigned char *body, size_t body_len)
+{
     size_t caplen;
     size_t opts;
     int status;
@@ -125,14 +140,9 @@ static int pcw_ng_epb(pcw_reader_t *reader, const unsigned char *body, size_t bo
     caplen = pcw_rd32(body + 12, reader->big_endian);
     if (caplen > body_len - PCW_EPB_FIXED)
         return PCW_ERR_FORMAT;
-    interface_id = block->type == PCW_BLOCK_PB ? pcw_rd16(body, reader->big_endian) : pcw_rd32(body, reader->big_endian);
-    status = pcw_ng_bind(reader, interface_id, pcw_ng_ts(reader, body + 4));
+    status = pcw_ng_epb_packet(reader, body, caplen);
     if (status != PCW_OK)
         return status;
-    block->kind = PCW_KIND_PACKET;
-    block->orig_len = pcw_rd32(body + 16, reader->big_endian);
-    block->data = body + PCW_EPB_FIXED;
-    block->data_len = caplen;
     opts = PCW_EPB_FIXED + caplen + pcw_pad4(caplen);
     if (opts > body_len)
         opts = body_len;
@@ -248,7 +258,7 @@ static int pcw_ng_truncated_packet(pcw_reader_t *reader, uint32_t type, const un
     caplen = pcw_rd32(body + 12, reader->big_endian);
     if (caplen > body_len - PCW_EPB_FIXED)
         caplen = body_len - PCW_EPB_FIXED;
-    if (pcw_ng_epb(reader, body, PCW_EPB_FIXED + caplen) != PCW_OK)
+    if (pcw_ng_epb_packet(reader, body, caplen) != PCW_OK)
         return PCW_ERR_FORMAT;
     reader->block.options = NULL;
     reader->block.options_len = 0;
