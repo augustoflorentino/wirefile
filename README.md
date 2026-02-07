@@ -25,7 +25,7 @@ cc app.c $(pkg-config --cflags --libs wirefile)
 
 ## Single-file form
 
-`scripts/amalgamate.sh` writes `dist/wirefile.h`. Copy it into your project and, in exactly
+`scripts/amalgamate.sh` writes `dist/wirefile/wirefile.h`. Copy it into your project and, in exactly
 one `.c` file:
 
 ```c

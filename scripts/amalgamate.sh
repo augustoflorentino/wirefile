@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-out=${1:-$root/dist/wirefile.h}
+out=${1:-$root/dist/wirefile/wirefile.h}
 mkdir -p "$(dirname "$out")"
 
 {
