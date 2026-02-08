@@ -284,7 +284,7 @@ static void test_pcapng_crafted(void)
         check_crafted_blocks(reader, big);
         pcw_reader_destroy(reader);
         copy_capture(b.buf.data, b.buf.len, PCW_FORMAT_PCAPNG, &copy);
-        CHECK(big || same_bytes(copy.data, copy.len, b.buf.data, b.buf.len));
+        CHECK(same_bytes(copy.data, copy.len, b.buf.data, b.buf.len));
         compare_packets(&b.buf, &copy);
         free(copy.data);
         free(b.buf.data);
