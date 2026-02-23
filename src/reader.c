@@ -4,6 +4,9 @@
 
 #define PCW_MIN_BLOCK_LIMIT 64u
 
+typedef char pcw_block_head_check[offsetof(pcw_block_t, data) == 88 ? 1 : -1];
+typedef char pcw_block_size_check[sizeof(pcw_block_t) == 88 + 3 * sizeof(const unsigned char *) + 3 * sizeof(size_t) ? 1 : -1];
+
 int pcw_reader_create(pcw_alloc_fn alloc_fn, pcw_free_fn free_fn, void *alloc_ctx, pcw_reader_t **out_reader)
 {
     pcw_mem_t mem;
