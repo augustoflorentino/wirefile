@@ -67,7 +67,7 @@ int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned c
 static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned char *fixed, size_t fixed_len, const unsigned char *data, size_t data_len, const unsigned char *opts, size_t opts_len)
 {
     unsigned char word[8];
-    uint64_t total = 12u + fixed_len + data_len + pcw_pad4(data_len) + opts_len + pcw_pad4(opts_len);
+    uint64_t total = (uint64_t)12u + fixed_len + data_len + pcw_pad4(data_len) + opts_len + pcw_pad4(opts_len);
     int status;
 
     if (total > UINT32_MAX)

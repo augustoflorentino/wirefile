@@ -98,6 +98,7 @@ static int pcw_pcap_truncated(pcw_reader_t *reader)
 
 int pcw_read_pcap_record(pcw_reader_t *reader)
 {
+    uint64_t wide;
     size_t total;
     int status = pcw_fill(reader, PCW_PCAP_RECORD_LEN);
 
@@ -105,7 +106,8 @@ int pcw_read_pcap_record(pcw_reader_t *reader)
         return pcw_stop_trailing(reader);
     if (status != PCW_OK)
         return pcw_stop(reader, status);
-    total = PCW_PCAP_RECORD_LEN + (size_t)pcw_rd32(reader->data + reader->pos + 8, reader->big_endian);
+    wide = PCW_PCAP_RECORD_LEN + (uint64_t)pcw_rd32(reader->data + reader->pos + 8, reader->big_endian);
+    total = wide > SIZE_MAX ? SIZE_MAX : (size_t)wide;
     if (reader->stream && total > reader->max_block_len) {
         status = pcw_skip(reader, total);
         return status == PCW_OK ? PCW_ERR_LIMIT : pcw_stop(reader, status == PCW_END ? PCW_END : status);

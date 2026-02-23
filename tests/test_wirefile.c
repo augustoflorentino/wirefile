@@ -567,6 +567,38 @@ static void test_limits(void)
     }
 }
 
+static void test_huge_lengths(void)
+{
+    static const unsigned char file[24 + 16 + 4] = {
+        0xd4, 0xc3, 0xb2, 0xa1, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0xf0, 0xff, 0xff, 0xff, 4, 0, 0, 0, 1, 2, 3, 4,
+    };
+    source_t src = {file, sizeof(file), 0, 3};
+    pcw_reader_t *reader = open_mem_reader(file, sizeof(file));
+    pcw_writer_t *writer = NULL;
+    membuf_t out = {NULL, 0, 0};
+    const pcw_block_t *block;
+    size_t written;
+
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->kind == PCW_KIND_PACKET && block->data_len == 4 && (block->flags & PCW_FLAG_TRUNCATED));
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    pcw_reader_destroy(reader);
+    reader = open_stream_reader(&src, 64, 4);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    pcw_reader_destroy(reader);
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_OK);
+    written = out.len;
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 0xfffffff0u, 0xfffffff0u), PCW_ERR_ARG);
+    CHECK(out.len == written);
+    pcw_writer_destroy(writer);
+    free(out.data);
+}
+
 static void test_interface_limit(void)
 {
     builder_t b = crafted_pcapng(0);
@@ -747,6 +779,7 @@ int main(void)
     test_bad_input();
     test_read_callback_errors();
     test_limits();
+    test_huge_lengths();
     test_interface_limit();
     test_writer_errors();
     test_alloc_failure();
