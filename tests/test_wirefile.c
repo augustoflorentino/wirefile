@@ -272,6 +272,36 @@ static void compare_packets(const membuf_t *a, const membuf_t *b)
     pcw_reader_destroy(reader_a);
 }
 
+static void test_invalid_interface(void)
+{
+    static const unsigned char bad_resol = 0x40;
+    int big;
+
+    for (big = 0; big <= 1; big++) {
+        builder_t b = {{NULL, 0, 0}, big};
+        builder_t idb = body_of(&b);
+        pcw_reader_t *reader;
+        const pcw_block_t *block;
+
+        put_shb(&b);
+        put_uint(&idb, PCW_LINKTYPE_ETHERNET, 2);
+        put_uint(&idb, 0, 6);
+        put_option(&idb, PCW_OPT_IF_TSRESOL, &bad_resol, 1);
+        put_option(&idb, PCW_OPT_END, NULL, 0);
+        put_block(&b, PCW_BLOCK_IDB, &idb);
+        put_idb(&b, PCW_LINKTYPE_USER0, 0, 0);
+        put_epb(&b, 0, 1, 2, 2);
+        put_epb(&b, 1, 1, 2, 2);
+        reader = open_mem_reader(b.buf.data, b.buf.len);
+        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_FORMAT);
+        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_FORMAT);
+        pcw_reader_destroy(reader);
+        free(idb.buf.data);
+        free(b.buf.data);
+    }
+}
+
 static void test_pcapng_crafted(void)
 {
     int big;
@@ -775,6 +805,7 @@ int main(void)
     test_conversion();
     test_pcap_big_endian();
     test_pcapng_crafted();
+    test_invalid_interface();
     test_truncated();
     test_bad_input();
     test_read_callback_errors();

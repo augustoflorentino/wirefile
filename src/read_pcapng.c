@@ -83,10 +83,8 @@ static int pcw_ng_iface_options(const pcw_block_t *block, pcw_iface_t *iface)
     return pcw_ts_resol_valid(iface->ts_resol) ? PCW_OK : PCW_ERR_FORMAT;
 }
 
-static int pcw_ng_idb(pcw_reader_t *reader, const unsigned char *body, size_t body_len)
+static int pcw_ng_idb_parse(pcw_reader_t *reader, const unsigned char *body, size_t body_len, pcw_iface_t *iface)
 {
-    pcw_block_t *block = &reader->block;
-    pcw_iface_t iface = {0};
     int status;
 
     if (body_len < PCW_IDB_FIXED)
@@ -94,13 +92,20 @@ static int pcw_ng_idb(pcw_reader_t *reader, const unsigned char *body, size_t bo
     status = pcw_ng_options(reader, body + PCW_IDB_FIXED, body_len - PCW_IDB_FIXED);
     if (status != PCW_OK)
         return status;
-    iface.linktype = pcw_rd16(body, reader->big_endian);
-    iface.snaplen = pcw_rd32(body + 4, reader->big_endian);
-    iface.ts_resol = PCW_TSRESOL_MICRO;
-    status = pcw_ng_iface_options(block, &iface);
-    if (status != PCW_OK)
-        return status;
-    status = pcw_iface_add(&reader->mem, &reader->ifaces, &iface);
+    iface->linktype = pcw_rd16(body, reader->big_endian);
+    iface->snaplen = pcw_rd32(body + 4, reader->big_endian);
+    iface->ts_resol = PCW_TSRESOL_MICRO;
+    return pcw_ng_iface_options(&reader->block, iface);
+}
+
+static int pcw_ng_idb(pcw_reader_t *reader, const unsigned char *body, size_t body_len)
+{
+    pcw_block_t *block = &reader->block;
+    pcw_iface_t iface = {0};
+    int status = pcw_ng_idb_parse(reader, body, body_len, &iface);
+
+    if (status == PCW_OK)
+        status = pcw_iface_add(&reader->mem, &reader->ifaces, &iface);
     if (status != PCW_OK)
         return pcw_stop(reader, status);
     block->kind = PCW_KIND_INTERFACE;

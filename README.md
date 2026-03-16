@@ -120,8 +120,8 @@ them with `pcw_get_u16`, `pcw_get_u32` and `pcw_get_u64`, which take the block t
 ### Errors and limits
 
 - `PCW_ERR_FORMAT` on a block whose content is broken skips that block, and the next call
-  continues; a broken file header, section header, block length or trailing length stops the
-  reader, and every later call returns the same error
+  continues; a broken file header, section header, interface block, block length or trailing
+  length stops the reader, and every later call returns the same error
 - a file cut in the middle of a packet returns that packet with `PCW_FLAG_TRUNCATED` and
   `data_len` set to what is there, then `PCW_END`; cut anywhere else, `PCW_END` comes at once
   and `pcw_reader_trailing` says how many bytes were left over
