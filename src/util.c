@@ -80,15 +80,17 @@ size_t pcw_pad4(size_t len)
 int pcw_iface_add(const pcw_mem_t *mem, pcw_iface_table_t *table, const pcw_iface_t *iface)
 {
     pcw_iface_t *items;
-    uint32_t cap;
+    uint64_t cap;
     uint32_t i;
 
     if (table->count >= table->max)
         return PCW_ERR_LIMIT;
     if (table->count == table->cap) {
-        cap = table->cap ? table->cap * 2 : 4;
+        cap = table->cap ? (uint64_t)table->cap * 2 : 4;
         if (cap > table->max)
             cap = table->max;
+        if (cap > SIZE_MAX / sizeof(*items))
+            return PCW_ERR_NOMEM;
         items = mem->alloc_fn(mem->ctx, (size_t)cap * sizeof(*items));
         if (items == NULL)
             return PCW_ERR_NOMEM;
@@ -96,7 +98,7 @@ int pcw_iface_add(const pcw_mem_t *mem, pcw_iface_table_t *table, const pcw_ifac
             items[i] = table->items[i];
         pcw_iface_free(mem, table);
         table->items = items;
-        table->cap = cap;
+        table->cap = (uint32_t)cap;
     }
     table->items[table->count++] = *iface;
     return PCW_OK;
