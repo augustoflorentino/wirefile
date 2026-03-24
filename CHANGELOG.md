@@ -4,6 +4,17 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+Fixes, no API change.
+
+- security: on 32-bit builds a pcap record length near 4 GiB wrapped the size computation;
+  the reader returned the same packet forever with `data_len` past the end of the buffer.
+  It is now read as a truncated packet
+- on 32-bit builds the pcapng writer did not reject a packet over 4 GiB and wrote a block
+  with a wrong length
+- a pcapng interface block that failed to parse was skipped, so packets of the next interfaces
+  were reported with the wrong interface and link type. A broken interface block now stops the
+  reader with `PCW_ERR_FORMAT`, as Wireshark does
+
 ## 0.1.0 - 2026-02-20
 
 First release.
