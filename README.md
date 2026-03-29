@@ -117,6 +117,10 @@ Both return `PCW_END` when there is nothing more. `pcw_name_next` walks the reco
 `PCW_KIND_NAMES` block the same way. Numbers inside options are in the file's byte order: read
 them with `pcw_get_u16`, `pcw_get_u32` and `pcw_get_u64`, which take the block to know it.
 
+`pcw_block_fcs_len(block, &bits)` gives the length in bits of the frame check sequence at the
+end of each packet, from the pcap file header, the pcapng `if_fcslen` option or the FCS length
+in a packet's `epb_flags`. It returns `PCW_END` when the block does not say.
+
 ### Errors and limits
 
 - `PCW_ERR_FORMAT` on a block whose content is broken skips that block, and the next call
@@ -156,7 +160,8 @@ byte order it had.
 - `name` and `snaplen` are optional (`NULL`, 0)
 - `pcw_writer_block` writes a block that a reader returned, so a copy or a conversion is a loop
   of `pcw_reader_next` and `pcw_writer_block`. pcapng to pcapng and pcap to pcap come out
-  byte for byte identical. pcap to pcapng gives one section and one interface. pcapng to pcap
+  byte for byte identical. pcap to pcapng gives one section and one interface, and the FCS
+  length goes both ways between the pcap header and `if_fcslen`. pcapng to pcap
   keeps the packets under the first interface; it fails with `PCW_ERR_FORMAT` at an
   interface with another link type, and drops options, name records, statistics and custom
   blocks, which pcap cannot hold. Blocks mixed in from a source in the other byte order lose
@@ -165,7 +170,8 @@ byte order it had.
 
 ### Link types
 
-`PCW_LINKTYPE_*` names the ones this library is tested with: `USER0` to `USER15` (147 to 162,
+A pcap file header with any of the reserved link type bits set is rejected with
+`PCW_ERR_FORMAT`, as libpcap and Wireshark do. `PCW_LINKTYPE_*` names the ones this library is tested with: `USER0` to `USER15` (147 to 162,
 for raw HID reports), Bluetooth HCI H4 (187, 201 with direction header), Linux usbmon (189,
 220) and USBPcap (249). Any other link type passes through unchanged.
 

@@ -32,16 +32,23 @@ int pcw_emit_zeros(pcw_writer_t *writer, size_t len)
     return status;
 }
 
-int pcw_write_pcap_header(pcw_writer_t *writer, uint32_t linktype, uint32_t snaplen, uint32_t ts_resol)
+static uint32_t pcw_pcap_linktype_field(const pcw_iface_t *iface)
+{
+    if (!iface->has_fcs || iface->fcs_bits % 16 != 0 || iface->fcs_bits / 16 > 15)
+        return iface->linktype;
+    return iface->linktype | 0x04000000u | (iface->fcs_bits / 16) << 28;
+}
+
+int pcw_write_pcap_header(pcw_writer_t *writer, const pcw_iface_t *iface)
 {
     unsigned char header[PCW_PCAP_HEADER_LEN] = {0};
     int big = writer->big_endian;
 
-    pcw_wr32(header, ts_resol == PCW_TSRESOL_NANO ? 0xA1B23C4Du : 0xA1B2C3D4u, big);
+    pcw_wr32(header, iface->ts_resol == PCW_TSRESOL_NANO ? 0xA1B23C4Du : 0xA1B2C3D4u, big);
     pcw_wr16(header + 4, PCW_PCAP_VERSION_MAJOR, big);
     pcw_wr16(header + 6, PCW_PCAP_VERSION_MINOR, big);
-    pcw_wr32(header + 16, snaplen, big);
-    pcw_wr32(header + 20, linktype, big);
+    pcw_wr32(header + 16, iface->snaplen, big);
+    pcw_wr32(header + 20, pcw_pcap_linktype_field(iface), big);
     return pcw_emit(writer, header, sizeof(header));
 }
 
@@ -125,8 +132,10 @@ static size_t pcw_put_option(unsigned char *dst, uint16_t code, const void *valu
 static int pcw_write_idb_fresh(pcw_writer_t *writer, const unsigned char *fixed, const pcw_iface_t *iface, const char *name)
 {
     size_t name_len = name ? strlen(name) : 0;
-    size_t opts_len = 4 + (name_len ? 4 + name_len + pcw_pad4(name_len) : 0) + (iface->ts_resol != PCW_TSRESOL_MICRO ? 8 : 0);
+    int fcs = iface->has_fcs && iface->fcs_bits <= UINT8_MAX;
+    size_t opts_len = 4 + (name_len ? 4 + name_len + pcw_pad4(name_len) : 0) + (iface->ts_resol != PCW_TSRESOL_MICRO ? 8 : 0) + (fcs ? 8 : 0);
     unsigned char resol = (unsigned char)iface->ts_resol;
+    unsigned char fcs_bits = (unsigned char)iface->fcs_bits;
     unsigned char *opts;
     size_t pos = 0;
     int status;
@@ -140,6 +149,8 @@ static int pcw_write_idb_fresh(pcw_writer_t *writer, const unsigned char *fixed,
         pos += pcw_put_option(opts, PCW_OPT_IF_NAME, name, name_len, writer->big_endian);
     if (iface->ts_resol != PCW_TSRESOL_MICRO)
         pos += pcw_put_option(opts + pos, PCW_OPT_IF_TSRESOL, &resol, 1, writer->big_endian);
+    if (fcs)
+        pos += pcw_put_option(opts + pos, PCW_OPT_IF_FCSLEN, &fcs_bits, 1, writer->big_endian);
     pcw_put_option(opts + pos, PCW_OPT_END, NULL, 0, writer->big_endian);
     status = pcw_write_framed(writer, PCW_BLOCK_IDB, fixed, 8, NULL, 0, opts, opts_len);
     writer->mem.free_fn(writer->mem.ctx, opts);

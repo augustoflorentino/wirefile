@@ -442,6 +442,102 @@ static void test_pcap_big_endian(void)
     free(b.buf.data);
 }
 
+static builder_t fcs_pcap(uint32_t linktype_field)
+{
+    builder_t b = {{NULL, 0, 0}, 0};
+
+    put_uint(&b, 0xA1B2C3D4, 4);
+    put_uint(&b, 2, 2);
+    put_uint(&b, 4, 2);
+    put_uint(&b, 0, 8);
+    put_uint(&b, 65535, 4);
+    put_uint(&b, linktype_field, 4);
+    put_uint(&b, 1600000000, 4);
+    put_uint(&b, 7, 4);
+    put_uint(&b, sizeof(payload), 4);
+    put_uint(&b, sizeof(payload), 4);
+    put_bytes(&b, payload, sizeof(payload));
+    return b;
+}
+
+static uint32_t first_fcs(const membuf_t *in, uint32_t kind)
+{
+    pcw_reader_t *reader = open_mem_reader(in->data, in->len);
+    const pcw_block_t *block;
+    uint32_t bits = UINT32_MAX;
+
+    while (pcw_reader_next(reader, &block) == PCW_OK) {
+        if (block->kind == kind) {
+            CHECK(block->linktype == PCW_LINKTYPE_ETHERNET);
+            if (pcw_block_fcs_len(block, &bits) != PCW_OK)
+                bits = 0;
+            break;
+        }
+    }
+    pcw_reader_destroy(reader);
+    return bits;
+}
+
+static void test_fcs(void)
+{
+    builder_t with = fcs_pcap(0x24000000u | PCW_LINKTYPE_ETHERNET);
+    builder_t without = fcs_pcap(0x10000000u | PCW_LINKTYPE_ETHERNET);
+    builder_t reserved = fcs_pcap(0x00010000u | PCW_LINKTYPE_ETHERNET);
+    membuf_t ng = {NULL, 0, 0};
+    membuf_t back = {NULL, 0, 0};
+    pcw_reader_t *reader;
+    const pcw_block_t *block;
+    uint32_t bits;
+
+    CHECK(first_fcs(&with.buf, PCW_KIND_SECTION) == 32);
+    CHECK(first_fcs(&without.buf, PCW_KIND_SECTION) == 0);
+    copy_capture(with.buf.data, with.buf.len, PCW_FORMAT_PCAPNG, &ng);
+    CHECK(first_fcs(&ng, PCW_KIND_INTERFACE) == 32);
+    copy_capture(ng.data, ng.len, PCW_FORMAT_PCAP, &back);
+    CHECK(same_bytes(with.buf.data, with.buf.len, back.data, back.len));
+    reader = open_mem_reader(reserved.buf.data, reserved.buf.len);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_FORMAT);
+    pcw_reader_destroy(reader);
+    CHECK_STATUS(pcw_block_fcs_len(NULL, &bits), PCW_ERR_ARG);
+    free(with.buf.data);
+    free(without.buf.data);
+    free(reserved.buf.data);
+    free(ng.data);
+    free(back.data);
+}
+
+static void test_epb_fcs(void)
+{
+    static const unsigned char fcs_flags[4] = {0x80, 0, 0, 0};
+    builder_t b = {{NULL, 0, 0}, 0};
+    builder_t body = body_of(&b);
+    pcw_reader_t *reader;
+    const pcw_block_t *block;
+    uint32_t bits = 0;
+
+    put_shb(&b);
+    put_idb(&b, PCW_LINKTYPE_ETHERNET, 0, 0);
+    put_epb(&b, 0, 1, 2, 2);
+    put_uint(&body, 0, 4);
+    put_uint(&body, 0, 8);
+    put_uint(&body, 0, 8);
+    put_option(&body, PCW_OPT_EPB_FLAGS, fcs_flags, sizeof(fcs_flags));
+    put_option(&body, PCW_OPT_END, NULL, 0);
+    put_block(&b, PCW_BLOCK_EPB, &body);
+    reader = open_mem_reader(b.buf.data, b.buf.len);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_block_fcs_len(block, &bits), PCW_END);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_block_fcs_len(block, &bits), PCW_END);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_block_fcs_len(block, &bits), PCW_OK);
+    CHECK(bits == 32);
+    pcw_reader_destroy(reader);
+    free(body.buf.data);
+    free(b.buf.data);
+}
+
 static void expect_truncated(const membuf_t *in, size_t cut, size_t data_len, size_t trailing)
 {
     pcw_reader_t *reader = open_mem_reader(in->data, in->len - cut);
@@ -811,6 +907,8 @@ int main(void)
     test_writer_roundtrip();
     test_conversion();
     test_pcap_big_endian();
+    test_fcs();
+    test_epb_fcs();
     test_pcapng_crafted();
     test_invalid_interface();
     test_truncated();

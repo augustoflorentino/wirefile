@@ -29,6 +29,8 @@ typedef struct pcw_iface {
     uint32_t snaplen;
     uint32_t ts_resol;
     int64_t ts_offset;
+    int has_fcs;
+    uint32_t fcs_bits;
 } pcw_iface_t;
 
 typedef struct pcw_iface_table {
@@ -107,7 +109,7 @@ PCW_LOCAL int pcw_read_pcapng_block(pcw_reader_t *reader);
 
 PCW_LOCAL int pcw_emit(pcw_writer_t *writer, const void *data, size_t data_len);
 PCW_LOCAL int pcw_emit_zeros(pcw_writer_t *writer, size_t len);
-PCW_LOCAL int pcw_write_pcap_header(pcw_writer_t *writer, uint32_t linktype, uint32_t snaplen, uint32_t ts_resol);
+PCW_LOCAL int pcw_write_pcap_header(pcw_writer_t *writer, const pcw_iface_t *iface);
 PCW_LOCAL int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned char *data, size_t data_len, uint64_t orig_len);
 PCW_LOCAL int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block);
 PCW_LOCAL int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const char *name, const pcw_block_t *block);

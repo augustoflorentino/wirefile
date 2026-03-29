@@ -64,6 +64,7 @@ extern "C" {
 #define PCW_OPT_IF_NAME 2u
 #define PCW_OPT_IF_DESCRIPTION 3u
 #define PCW_OPT_IF_TSRESOL 9u
+#define PCW_OPT_IF_FCSLEN 13u
 #define PCW_OPT_IF_TSOFFSET 14u
 #define PCW_OPT_EPB_FLAGS 2u
 #define PCW_OPT_EPB_HASH 3u
@@ -129,6 +130,7 @@ PCW_API size_t pcw_reader_trailing(const pcw_reader_t *reader);
 PCW_API int pcw_option_next(const pcw_block_t *block, size_t *io_pos, uint16_t *out_code, const unsigned char **out_value, size_t *out_value_len);
 PCW_API int pcw_option_find(const pcw_block_t *block, uint16_t code, const unsigned char **out_value, size_t *out_value_len);
 PCW_API int pcw_name_next(const pcw_block_t *block, size_t *io_pos, uint16_t *out_type, const unsigned char **out_value, size_t *out_value_len);
+PCW_API int pcw_block_fcs_len(const pcw_block_t *block, uint32_t *out_bits);
 PCW_API uint16_t pcw_get_u16(const pcw_block_t *block, const unsigned char *src);
 PCW_API uint32_t pcw_get_u32(const pcw_block_t *block, const unsigned char *src);
 PCW_API uint64_t pcw_get_u64(const pcw_block_t *block, const unsigned char *src);

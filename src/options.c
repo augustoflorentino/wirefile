@@ -68,6 +68,51 @@ int pcw_name_next(const pcw_block_t *block, size_t *io_pos, uint16_t *out_type, 
     return pcw_tlv_next(block->data, block->data_len, (block->flags & PCW_FLAG_BIG_ENDIAN) != 0, io_pos, out_type, out_value, out_value_len);
 }
 
+static int pcw_pcap_fcs_len(const pcw_block_t *block, uint32_t *out_bits)
+{
+    uint32_t raw;
+
+    if (block->body == NULL || block->body_len < 24)
+        return PCW_END;
+    raw = pcw_get_u32(block, block->body + 20);
+    if (!(raw & 0x04000000u))
+        return PCW_END;
+    *out_bits = (raw >> 28) * 16;
+    return PCW_OK;
+}
+
+static int pcw_ng_fcs_len(const pcw_block_t *block, uint32_t *out_bits)
+{
+    const unsigned char *value;
+    size_t value_len;
+    uint32_t octets;
+
+    if (block->kind == PCW_KIND_INTERFACE) {
+        if (pcw_option_find(block, PCW_OPT_IF_FCSLEN, &value, &value_len) != PCW_OK || value_len != 1)
+            return PCW_END;
+        *out_bits = value[0];
+        return PCW_OK;
+    }
+    if (block->type != PCW_BLOCK_EPB || pcw_option_find(block, PCW_OPT_EPB_FLAGS, &value, &value_len) != PCW_OK || value_len != 4)
+        return PCW_END;
+    octets = (pcw_get_u32(block, value) >> 5) & 0xFu;
+    if (octets == 0)
+        return PCW_END;
+    *out_bits = octets * 8;
+    return PCW_OK;
+}
+
+int pcw_block_fcs_len(const pcw_block_t *block, uint32_t *out_bits)
+{
+    if (block == NULL || out_bits == NULL)
+        return PCW_ERR_ARG;
+    if (block->format == PCW_FORMAT_PCAP && block->kind == PCW_KIND_SECTION)
+        return pcw_pcap_fcs_len(block, out_bits);
+    if (block->format == PCW_FORMAT_PCAPNG && (block->kind == PCW_KIND_INTERFACE || block->kind == PCW_KIND_PACKET))
+        return pcw_ng_fcs_len(block, out_bits);
+    return PCW_END;
+}
+
 uint16_t pcw_get_u16(const pcw_block_t *block, const unsigned char *src)
 {
     return pcw_rd16(src, block != NULL && (block->flags & PCW_FLAG_BIG_ENDIAN) != 0);

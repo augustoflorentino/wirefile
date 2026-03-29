@@ -75,7 +75,7 @@ static int pcw_writer_pcap_iface(pcw_writer_t *writer, const pcw_iface_t *iface)
     if (status != PCW_OK)
         return status;
     writer->started = 1;
-    return pcw_write_pcap_header(writer, iface->linktype, iface->snaplen, iface->ts_resol);
+    return pcw_write_pcap_header(writer, iface);
 }
 
 static int pcw_writer_begin_section(pcw_writer_t *writer, const pcw_block_t *block)
@@ -188,6 +188,7 @@ static pcw_iface_t pcw_iface_of(const pcw_block_t *block)
     iface.snaplen = block->snaplen;
     iface.ts_resol = block->ts_resol;
     iface.ts_offset = block->ts_offset;
+    iface.has_fcs = pcw_block_fcs_len(block, &iface.fcs_bits) == PCW_OK;
     return iface;
 }
 
