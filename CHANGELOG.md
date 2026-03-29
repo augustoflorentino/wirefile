@@ -4,6 +4,8 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 0.1.1 - 2026-03-29
+
 Fixes, no API change.
 
 - security: on 32-bit builds a pcap record length near 4 GiB wrapped the size computation;
