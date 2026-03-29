@@ -69,7 +69,7 @@ static int pcw_writer_pcap_iface(pcw_writer_t *writer, const pcw_iface_t *iface)
 
     if (writer->started)
         return PCW_ERR_STATE;
-    if (!pcw_pcap_resol(iface->ts_resol))
+    if (!pcw_pcap_resol(iface->ts_resol) || iface->linktype > UINT16_MAX)
         return PCW_ERR_ARG;
     status = pcw_iface_add(&writer->mem, &writer->ifaces, iface);
     if (status != PCW_OK)

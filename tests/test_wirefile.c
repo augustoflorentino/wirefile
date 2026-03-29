@@ -431,6 +431,11 @@ static void test_pcap_big_endian(void)
     CHECK(block->ts_sec == 1600000000 && block->ts_nsec == 42 && block->data_len == sizeof(payload));
     CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
     pcw_reader_destroy(reader);
+    b.buf.data[21] = 0x01;
+    reader = open_mem_reader(b.buf.data, b.buf.len);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_FORMAT);
+    pcw_reader_destroy(reader);
+    b.buf.data[21] = 0x00;
     copy_capture(b.buf.data, b.buf.len, PCW_FORMAT_PCAP, &copy);
     CHECK(same_bytes(copy.data, copy.len, b.buf.data, b.buf.len));
     free(copy.data);
@@ -664,6 +669,8 @@ static void test_writer_errors(void)
     CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAP, membuf_write, &out), PCW_OK);
     CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAP, membuf_write, &out), PCW_ERR_STATE);
     CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, 3, NULL, NULL), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_add_interface(writer, 0x10000u | PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_ERR_ARG);
+    CHECK(out.len == 0);
     CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_OK);
     CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + 1, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_ERR_STATE);
     CHECK_STATUS(pcw_writer_packet(writer, 1, 0, 0, payload, 1, 1), PCW_ERR_ARG);

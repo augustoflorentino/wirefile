@@ -2,7 +2,8 @@
 
 #define PCW_PCAP_MAGIC_MICRO 0xA1B2C3D4u
 #define PCW_PCAP_MAGIC_NANO 0xA1B23C4Du
-#define PCW_PCAP_LINKTYPE_MASK 0x03FFFFFFu
+#define PCW_PCAP_LINKTYPE_MASK 0x0000FFFFu
+#define PCW_PCAP_LINKTYPE_RESERVED 0x03FF0000u
 
 static int pcw_pcap_magic(const unsigned char *src, int *out_big_endian, uint32_t *out_ts_resol)
 {
@@ -49,6 +50,8 @@ int pcw_read_pcap_header(pcw_reader_t *reader)
         return pcw_stop(reader, status == PCW_END ? PCW_ERR_FORMAT : status);
     src = reader->data + reader->pos;
     if (pcw_pcap_magic(src, &reader->big_endian, &ts_resol) != PCW_OK)
+        return pcw_stop(reader, PCW_ERR_FORMAT);
+    if (pcw_rd32(src + 20, reader->big_endian) & PCW_PCAP_LINKTYPE_RESERVED)
         return pcw_stop(reader, PCW_ERR_FORMAT);
     reader->format = PCW_FORMAT_PCAP;
     reader->section_count = 1;
