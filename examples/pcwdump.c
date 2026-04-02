@@ -57,11 +57,15 @@ static void print_options(const pcw_block_t *block)
 
 static void print_block(const pcw_block_t *block)
 {
+    uint32_t fcs_bits;
+
     printf("%s type=0x%08x section=%u if=%u linktype=%u snaplen=%u flags=0x%x", kind_name(block->kind), (unsigned)block->type, (unsigned)block->section, (unsigned)block->interface_id, (unsigned)block->linktype, (unsigned)block->snaplen, (unsigned)block->flags);
     if (block->kind == PCW_KIND_PACKET || block->kind == PCW_KIND_STATS)
         printf(" ts=%lld.%09u", (long long)block->ts_sec, (unsigned)block->ts_nsec);
     if (block->kind == PCW_KIND_PACKET)
         printf(" caplen=%zu len=%llu", block->data_len, (unsigned long long)block->orig_len);
+    if (pcw_block_fcs_len(block, &fcs_bits) == PCW_OK)
+        printf(" fcs=%u", (unsigned)fcs_bits);
     printf("\n");
     print_options(block);
 }
