@@ -17,7 +17,7 @@ fi
 
 if [ "$mode" = save ]; then
     mkdir -p "$(dirname "$baseline")"
-    abidw --out-file "$baseline" "$lib"
+    abidw --no-corpus-path --no-comp-dir-path --no-show-locs --out-file "$baseline" "$lib"
     echo "baseline saved: $baseline"
     exit 0
 fi

@@ -38,7 +38,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_SHARED_LIBS": "ON",
-        "CMAKE_C_FLAGS": "-g -Og"
+        "CMAKE_C_FLAGS": "-g -Og -ffile-prefix-map=${sourceDir}/="
       }
     }
   ],
