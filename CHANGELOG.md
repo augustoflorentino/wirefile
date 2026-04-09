@@ -4,6 +4,21 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 0.2.0 - 2026-04-09
+
+Adds to the API; existing code builds and links unchanged.
+
+- `pcw_block_fcs_len` gives the FCS length from a pcap file header, a pcapng `if_fcslen`
+  option or a packet's `epb_flags`; `PCW_OPT_IF_FCSLEN` names the option
+- converting between pcap and pcapng keeps the FCS length, so Wireshark still shows the FCS
+  instead of a trailer
+- `pcwdump` prints the FCS length when the block has one
+- a pcap file header with reserved link type bits set is rejected with `PCW_ERR_FORMAT`, as
+  libpcap and Wireshark do; before, those bits ended up in `linktype`
+- the pcap writer rejects a link type over 65535 with `PCW_ERR_ARG` instead of writing it
+  into the reserved bits
+- the ABI baseline no longer records build paths
+
 ## 0.1.1 - 2026-03-29
 
 Fixes, no API change.

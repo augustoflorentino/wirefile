@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(wirefile VERSION 0.1.1 DESCRIPTION "Read and write pcap and pcapng capture files" LANGUAGES C)
+project(wirefile VERSION 0.2.0 DESCRIPTION "Read and write pcap and pcapng capture files" LANGUAGES C)
 
 option(WIREFILE_BUILD_TESTS "Build tests" OFF)
 option(WIREFILE_BUILD_EXAMPLES "Build examples" OFF)
