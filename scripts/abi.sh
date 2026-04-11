@@ -34,7 +34,7 @@ if [ "$base_soname" != "$soname" ]; then
 fi
 
 set +e
-abidiff --no-added-syms "$baseline" "$lib"
+abidiff --no-added-syms --hd1 "$root/include/wirefile" --hd2 "$root/include/wirefile" "$baseline" "$lib"
 status=$?
 set -e
 if (( status & 3 )); then
