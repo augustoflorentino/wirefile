@@ -33,6 +33,12 @@ typedef struct pcw_iface {
     uint32_t fcs_bits;
 } pcw_iface_t;
 
+typedef struct pcw_optlist {
+    uint32_t block_type;
+    const pcw_option_t *items;
+    size_t count;
+} pcw_optlist_t;
+
 typedef struct pcw_iface_table {
     pcw_iface_t *items;
     uint32_t count;
@@ -112,9 +118,14 @@ PCW_LOCAL int pcw_emit_zeros(pcw_writer_t *writer, size_t len);
 PCW_LOCAL int pcw_write_pcap_header(pcw_writer_t *writer, const pcw_iface_t *iface);
 PCW_LOCAL int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned char *data, size_t data_len, uint64_t orig_len);
 PCW_LOCAL int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block);
-PCW_LOCAL int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const char *name, const pcw_block_t *block);
-PCW_LOCAL int pcw_write_epb(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const pcw_block_t *block);
+PCW_LOCAL int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_optlist_t *list, const pcw_block_t *block);
+PCW_LOCAL int pcw_write_epb(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const pcw_block_t *block, const pcw_optlist_t *list);
 PCW_LOCAL int pcw_write_spb(pcw_writer_t *writer, const pcw_block_t *block);
 PCW_LOCAL int pcw_write_raw(pcw_writer_t *writer, uint32_t type, const unsigned char *body, size_t body_len);
+
+PCW_LOCAL int pcw_optlist_user_check(const pcw_optlist_t *list);
+PCW_LOCAL int pcw_optlist_check(const pcw_optlist_t *list, size_t *out_len);
+PCW_LOCAL int pcw_optlist_emit(pcw_writer_t *writer, const pcw_optlist_t *list);
+PCW_LOCAL int pcw_optlist_find(const pcw_optlist_t *list, uint16_t code, const pcw_option_t **out_opt);
 
 #endif

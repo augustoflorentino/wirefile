@@ -143,11 +143,14 @@ in a packet's `epb_flags`. It returns `PCW_END` when the block does not say.
 ```c
 pcw_writer_t *writer;
 uint32_t iface;
+uint32_t flags = PCW_EPB_INBOUND;
+pcw_option_t name = {PCW_OPT_IF_NAME, "hid0", 4};
+pcw_option_t direction = {PCW_OPT_EPB_FLAGS, &flags, sizeof(flags)};
 
 pcw_writer_create(NULL, NULL, NULL, &writer);
 pcw_writer_open(writer, PCW_FORMAT_PCAPNG, my_write, my_ctx);
-pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, "hid0", &iface);
-pcw_writer_packet(writer, iface, ts_sec, ts_nsec, data, data_len, orig_len);
+pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, &name, 1, &iface);
+pcw_writer_packet(writer, iface, ts_sec, ts_nsec, data, data_len, orig_len, &direction, 1);
 pcw_writer_destroy(writer);
 ```
 
@@ -157,7 +160,15 @@ byte order it had.
 
 - the timestamp is stored in the interface resolution, truncated, not rounded; pcap accepts
   only micro and nano and one interface
-- `name` and `snaplen` are optional (`NULL`, 0)
+- `snaplen` is optional (0)
+- options are a list of `{code, value, value_len}`, or `NULL, 0` for none. The numbers of the
+  options the pcapng spec gives a fixed size (`if_speed`, `if_tzone`, `if_fcslen`,
+  `if_txspeed`, `if_rxspeed`, `epb_flags`, `epb_dropcount`, `epb_packetid`, `epb_queue`,
+  `epb_processid_threadid`) are given in host byte order and written in the file's; any other
+  option is written as given. `PCW_ERR_ARG`, with nothing written, for code 0, a value over
+  65535 bytes, a fixed size option of another size, and `if_tsresol` or `if_tsoffset`, which
+  come from `ts_resol`
+- pcap keeps only `if_fcslen`, in the file header; it drops the other options
 - `pcw_writer_block` writes a block that a reader returned, so a copy or a conversion is a loop
   of `pcw_reader_next` and `pcw_writer_block`. pcapng to pcapng and pcap to pcap come out
   byte for byte identical. pcap to pcapng gives one section and one interface, and the FCS

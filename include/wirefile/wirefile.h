@@ -63,12 +63,25 @@ extern "C" {
 #define PCW_OPT_SHB_USERAPPL 4u
 #define PCW_OPT_IF_NAME 2u
 #define PCW_OPT_IF_DESCRIPTION 3u
+#define PCW_OPT_IF_SPEED 8u
 #define PCW_OPT_IF_TSRESOL 9u
+#define PCW_OPT_IF_TZONE 10u
+#define PCW_OPT_IF_FILTER 11u
+#define PCW_OPT_IF_OS 12u
 #define PCW_OPT_IF_FCSLEN 13u
 #define PCW_OPT_IF_TSOFFSET 14u
+#define PCW_OPT_IF_HARDWARE 15u
+#define PCW_OPT_IF_TXSPEED 16u
+#define PCW_OPT_IF_RXSPEED 17u
 #define PCW_OPT_EPB_FLAGS 2u
 #define PCW_OPT_EPB_HASH 3u
 #define PCW_OPT_EPB_DROPCOUNT 4u
+#define PCW_OPT_EPB_PACKETID 5u
+#define PCW_OPT_EPB_QUEUE 6u
+#define PCW_OPT_EPB_PROCESSID_THREADID 8u
+
+#define PCW_EPB_INBOUND 0x1u
+#define PCW_EPB_OUTBOUND 0x2u
 
 #define PCW_NAME_END 0u
 #define PCW_NAME_IPV4 1u
@@ -118,6 +131,12 @@ typedef struct pcw_block {
     size_t body_len;
 } pcw_block_t;
 
+typedef struct pcw_option {
+    uint16_t code;
+    const void *value;
+    size_t value_len;
+} pcw_option_t;
+
 PCW_API int pcw_reader_create(pcw_alloc_fn alloc_fn, pcw_free_fn free_fn, void *alloc_ctx, pcw_reader_t **out_reader);
 PCW_API void pcw_reader_destroy(pcw_reader_t *reader);
 PCW_API int pcw_reader_set_limits(pcw_reader_t *reader, size_t max_block_len, uint32_t max_interfaces);
@@ -138,8 +157,8 @@ PCW_API uint64_t pcw_get_u64(const pcw_block_t *block, const unsigned char *src)
 PCW_API int pcw_writer_create(pcw_alloc_fn alloc_fn, pcw_free_fn free_fn, void *alloc_ctx, pcw_writer_t **out_writer);
 PCW_API void pcw_writer_destroy(pcw_writer_t *writer);
 PCW_API int pcw_writer_open(pcw_writer_t *writer, uint32_t format, pcw_write_fn write_fn, void *write_ctx);
-PCW_API int pcw_writer_add_interface(pcw_writer_t *writer, uint32_t linktype, uint32_t snaplen, uint32_t ts_resol, const char *name, uint32_t *out_interface_id);
-PCW_API int pcw_writer_packet(pcw_writer_t *writer, uint32_t interface_id, int64_t ts_sec, uint32_t ts_nsec, const void *data, size_t data_len, uint64_t orig_len);
+PCW_API int pcw_writer_add_interface(pcw_writer_t *writer, uint32_t linktype, uint32_t snaplen, uint32_t ts_resol, const pcw_option_t *options, size_t options_count, uint32_t *out_interface_id);
+PCW_API int pcw_writer_packet(pcw_writer_t *writer, uint32_t interface_id, int64_t ts_sec, uint32_t ts_nsec, const void *data, size_t data_len, uint64_t orig_len, const pcw_option_t *options, size_t options_count);
 PCW_API int pcw_writer_block(pcw_writer_t *writer, const pcw_block_t *block);
 PCW_API uint64_t pcw_writer_offset(const pcw_writer_t *writer);
 

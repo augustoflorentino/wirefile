@@ -16,6 +16,7 @@ add_library(wirefile
     src/timestamp.c
     src/util.c
     src/write_formats.c
+    src/write_options.c
     src/writer.c)
 add_library(wirefile::wirefile ALIAS wirefile)
 target_include_directories(wirefile PUBLIC

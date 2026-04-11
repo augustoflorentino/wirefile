@@ -323,15 +323,16 @@ static void test_pcapng_crafted(void)
 
 static void write_simple(uint32_t format, uint32_t linktype, uint32_t ts_resol, membuf_t *out)
 {
+    static const pcw_option_t if_name = {PCW_OPT_IF_NAME, "hid0", 4};
     pcw_writer_t *writer = NULL;
     uint32_t iface = 99;
 
     CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
     CHECK_STATUS(pcw_writer_open(writer, format, membuf_write, out), PCW_OK);
-    CHECK_STATUS(pcw_writer_add_interface(writer, linktype, 65535, ts_resol, "hid0", &iface), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, linktype, 65535, ts_resol, &if_name, 1, &iface), PCW_OK);
     CHECK(iface == 0);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 1700000000, 123456789u, payload, sizeof(payload), sizeof(payload)), PCW_OK);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 1700000001, 999999999u, payload, 4, sizeof(payload)), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1700000000, 123456789u, payload, sizeof(payload), sizeof(payload), NULL, 0), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1700000001, 999999999u, payload, 4, sizeof(payload), NULL, 0), PCW_OK);
     CHECK(pcw_writer_offset(writer) == out->len);
     pcw_writer_destroy(writer);
 }
@@ -538,6 +539,182 @@ static void test_epb_fcs(void)
     free(b.buf.data);
 }
 
+static void write_with_options(pcw_writer_t *writer)
+{
+    static const unsigned char fcs = 32;
+    static const char comment[] = "left stick";
+    uint64_t speed = 12000000;
+    uint32_t flags = PCW_EPB_INBOUND;
+    uint64_t packet_id = 0x0102030405060708u;
+    uint32_t process_thread[2] = {4242, 7};
+    pcw_option_t iface_opts[4];
+    pcw_option_t packet_opts[4];
+    uint32_t iface = 99;
+
+    iface_opts[0].code = PCW_OPT_IF_NAME;
+    iface_opts[0].value = "hid0";
+    iface_opts[0].value_len = 4;
+    iface_opts[1].code = PCW_OPT_IF_DESCRIPTION;
+    iface_opts[1].value = "gamepad";
+    iface_opts[1].value_len = 7;
+    iface_opts[2].code = PCW_OPT_IF_SPEED;
+    iface_opts[2].value = &speed;
+    iface_opts[2].value_len = sizeof(speed);
+    iface_opts[3].code = PCW_OPT_IF_FCSLEN;
+    iface_opts[3].value = &fcs;
+    iface_opts[3].value_len = 1;
+    packet_opts[0].code = PCW_OPT_EPB_FLAGS;
+    packet_opts[0].value = &flags;
+    packet_opts[0].value_len = sizeof(flags);
+    packet_opts[1].code = PCW_OPT_COMMENT;
+    packet_opts[1].value = comment;
+    packet_opts[1].value_len = sizeof(comment) - 1;
+    packet_opts[2].code = PCW_OPT_EPB_PACKETID;
+    packet_opts[2].value = &packet_id;
+    packet_opts[2].value_len = sizeof(packet_id);
+    packet_opts[3].code = PCW_OPT_EPB_PROCESSID_THREADID;
+    packet_opts[3].value = process_thread;
+    packet_opts[3].value_len = sizeof(process_thread);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_ETHERNET, 0, PCW_TSRESOL_NANO, iface_opts, 4, &iface), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, iface, 1, 2, payload, sizeof(payload), sizeof(payload), packet_opts, 4), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, iface, 1, 3, payload, sizeof(payload), sizeof(payload), NULL, 0), PCW_OK);
+}
+
+static int option_is(const pcw_block_t *block, uint16_t code, const void *value, size_t value_len)
+{
+    const unsigned char *found;
+    size_t found_len;
+
+    return pcw_option_find(block, code, &found, &found_len) == PCW_OK && found_len == value_len && memcmp(found, value, value_len) == 0;
+}
+
+static void check_with_options(const membuf_t *in, int big)
+{
+    pcw_reader_t *reader = open_mem_reader(in->data, in->len);
+    const pcw_block_t *block;
+    const unsigned char *value;
+    size_t value_len;
+    uint32_t bits = 0;
+
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(((block->flags & PCW_FLAG_BIG_ENDIAN) != 0) == big);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->kind == PCW_KIND_INTERFACE && block->ts_resol == PCW_TSRESOL_NANO);
+    CHECK(option_is(block, PCW_OPT_IF_NAME, "hid0", 4) && option_is(block, PCW_OPT_IF_DESCRIPTION, "gamepad", 7));
+    CHECK_STATUS(pcw_option_find(block, PCW_OPT_IF_SPEED, &value, &value_len), PCW_OK);
+    CHECK(value_len == 8 && pcw_get_u64(block, value) == 12000000);
+    CHECK_STATUS(pcw_block_fcs_len(block, &bits), PCW_OK);
+    CHECK(bits == 32);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->kind == PCW_KIND_PACKET && block->ts_sec == 1 && block->ts_nsec == 2);
+    CHECK_STATUS(pcw_option_find(block, PCW_OPT_EPB_FLAGS, &value, &value_len), PCW_OK);
+    CHECK(value_len == 4 && pcw_get_u32(block, value) == PCW_EPB_INBOUND);
+    CHECK(option_is(block, PCW_OPT_COMMENT, "left stick", 10));
+    CHECK_STATUS(pcw_option_find(block, PCW_OPT_EPB_PACKETID, &value, &value_len), PCW_OK);
+    CHECK(value_len == 8 && pcw_get_u64(block, value) == 0x0102030405060708u);
+    CHECK_STATUS(pcw_option_find(block, PCW_OPT_EPB_PROCESSID_THREADID, &value, &value_len), PCW_OK);
+    CHECK(value_len == 8 && pcw_get_u32(block, value) == 4242 && pcw_get_u32(block, value + 4) == 7);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->options_len == 0);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    pcw_reader_destroy(reader);
+}
+
+static void test_writer_options(void)
+{
+    membuf_t out = {NULL, 0, 0};
+    builder_t b = {{NULL, 0, 0}, 1};
+    pcw_reader_t *reader;
+    pcw_writer_t *writer = NULL;
+    const pcw_block_t *block;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
+    write_with_options(writer);
+    pcw_writer_destroy(writer);
+    check_with_options(&out, (*(const unsigned char *)&(uint16_t){1}) == 0);
+    free(out.data);
+    memset(&out, 0, sizeof(out));
+    put_shb(&b);
+    reader = open_mem_reader(b.buf.data, b.buf.len);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_block(writer, block), PCW_OK);
+    write_with_options(writer);
+    pcw_writer_destroy(writer);
+    pcw_reader_destroy(reader);
+    check_with_options(&out, 1);
+    free(out.data);
+    free(b.buf.data);
+}
+
+static void test_writer_options_pcap(void)
+{
+    static const unsigned char fcs = 32;
+    pcw_option_t opts[2] = {{PCW_OPT_IF_NAME, "eth0", 4}, {PCW_OPT_IF_FCSLEN, &fcs, 1}};
+    pcw_option_t comment = {PCW_OPT_COMMENT, "dropped", 7};
+    membuf_t out = {NULL, 0, 0};
+    pcw_writer_t *writer = NULL;
+    uint32_t bits = 0;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAP, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_ETHERNET, 0, PCW_TSRESOL_MICRO, opts, 2, NULL), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, sizeof(payload), sizeof(payload), &comment, 1), PCW_OK);
+    pcw_writer_destroy(writer);
+    CHECK(out.len == 24 + 16 + sizeof(payload));
+    {
+        pcw_reader_t *reader = open_mem_reader(out.data, out.len);
+        const pcw_block_t *block;
+
+        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+        CHECK_STATUS(pcw_block_fcs_len(block, &bits), PCW_OK);
+        CHECK(bits == 32 && block->linktype == PCW_LINKTYPE_ETHERNET);
+        pcw_reader_destroy(reader);
+    }
+    free(out.data);
+}
+
+static void test_writer_bad_options(void)
+{
+    static const unsigned char one = 6;
+    uint32_t flags = 0;
+    pcw_option_t bad[] = {
+        {PCW_OPT_END, NULL, 0},
+        {PCW_OPT_IF_TSRESOL, &one, 1},
+        {PCW_OPT_IF_TSOFFSET, &flags, 8},
+        {PCW_OPT_IF_FCSLEN, &flags, 4},
+        {PCW_OPT_IF_NAME, NULL, 3},
+        {PCW_OPT_IF_NAME, payload, 70000},
+    };
+    pcw_option_t bad_packet[] = {
+        {PCW_OPT_END, NULL, 0},
+        {PCW_OPT_EPB_FLAGS, &flags, 2},
+        {PCW_OPT_EPB_PACKETID, &flags, 4},
+        {PCW_OPT_COMMENT, NULL, 1},
+    };
+    membuf_t out = {NULL, 0, 0};
+    pcw_writer_t *writer = NULL;
+    size_t written;
+    size_t i;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
+    for (i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+        CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, &bad[i], 1, NULL), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, 1, NULL), PCW_ERR_ARG);
+    CHECK(out.len == 0);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, 0, NULL), PCW_OK);
+    written = out.len;
+    for (i = 0; i < sizeof(bad_packet) / sizeof(bad_packet[0]); i++)
+        CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 1, 1, &bad_packet[i], 1), PCW_ERR_ARG);
+    CHECK(out.len == written);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 1, 1, &bad[1], 1), PCW_OK);
+    pcw_writer_destroy(writer);
+    free(out.data);
+}
+
 static void expect_truncated(const membuf_t *in, size_t cut, size_t data_len, size_t trailing)
 {
     pcw_reader_t *reader = open_mem_reader(in->data, in->len - cut);
@@ -662,10 +839,10 @@ static void write_with_big_packet(uint32_t format, membuf_t *out)
 
     CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
     CHECK_STATUS(pcw_writer_open(writer, format, membuf_write, out), PCW_OK);
-    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + 1, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_OK);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 3, 3), PCW_OK);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 2, 0, big, sizeof(big), sizeof(big)), PCW_OK);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 3, 0, payload, 3, 3), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + 1, 0, PCW_TSRESOL_MICRO, NULL, 0, NULL), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 3, 3, NULL, 0), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 2, 0, big, sizeof(big), sizeof(big), NULL, 0), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 3, 0, payload, 3, 3, NULL, 0), PCW_OK);
     pcw_writer_destroy(writer);
 }
 
@@ -722,9 +899,9 @@ static void test_huge_lengths(void)
     pcw_reader_destroy(reader);
     CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
     CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
-    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, 0, NULL), PCW_OK);
     written = out.len;
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 0xfffffff0u, 0xfffffff0u), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 1, 0, payload, 0xfffffff0u, 0xfffffff0u, NULL, 0), PCW_ERR_ARG);
     CHECK(out.len == written);
     pcw_writer_destroy(writer);
     free(out.data);
@@ -760,26 +937,26 @@ static void test_writer_errors(void)
     membuf_t out = {NULL, 0, 0};
 
     CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, payload, 1, 1), PCW_ERR_STATE);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, payload, 1, 1, NULL, 0), PCW_ERR_STATE);
     CHECK_STATUS(pcw_writer_open(writer, 7, membuf_write, &out), PCW_ERR_ARG);
     CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAP, membuf_write, &out), PCW_OK);
     CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAP, membuf_write, &out), PCW_ERR_STATE);
-    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, 3, NULL, NULL), PCW_ERR_ARG);
-    CHECK_STATUS(pcw_writer_add_interface(writer, 0x10000u | PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, 3, NULL, 0, NULL), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_add_interface(writer, 0x10000u | PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, 0, NULL), PCW_ERR_ARG);
     CHECK(out.len == 0);
-    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_OK);
-    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + 1, 0, PCW_TSRESOL_MICRO, NULL, NULL), PCW_ERR_STATE);
-    CHECK_STATUS(pcw_writer_packet(writer, 1, 0, 0, payload, 1, 1), PCW_ERR_ARG);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, payload, 2, 1), PCW_ERR_ARG);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, -1, 0, payload, 1, 1), PCW_ERR_ARG);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, (int64_t)UINT32_MAX + 1, 0, payload, 1, 1), PCW_ERR_ARG);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, NULL, 1, 1), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, 0, NULL), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + 1, 0, PCW_TSRESOL_MICRO, NULL, 0, NULL), PCW_ERR_STATE);
+    CHECK_STATUS(pcw_writer_packet(writer, 1, 0, 0, payload, 1, 1, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, payload, 2, 1, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, -1, 0, payload, 1, 1, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, (int64_t)UINT32_MAX + 1, 0, payload, 1, 1, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, NULL, 1, 1, NULL, 0), PCW_ERR_ARG);
     pcw_writer_destroy(writer);
     free(out.data);
     CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
     CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, failing_write, NULL), PCW_OK);
-    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, NULL, NULL), PCW_ERR_IO);
-    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, payload, 1, 1), PCW_ERR_IO);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, NULL, 0, NULL), PCW_ERR_IO);
+    CHECK_STATUS(pcw_writer_packet(writer, 0, 0, 0, payload, 1, 1, NULL, 0), PCW_ERR_IO);
     pcw_writer_destroy(writer);
 }
 
@@ -846,6 +1023,7 @@ static void free_fn_only(void *ctx, void *ptr)
 
 static int alloc_write(alloc_state_t *state, membuf_t *out)
 {
+    static const pcw_option_t if_name = {PCW_OPT_IF_NAME, "hid", 3};
     pcw_writer_t *writer = NULL;
     int status = pcw_writer_create(counting_alloc, counting_free, state, &writer);
     uint32_t i;
@@ -853,9 +1031,9 @@ static int alloc_write(alloc_state_t *state, membuf_t *out)
     if (status == PCW_OK)
         status = pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, out);
     for (i = 0; i < 6 && status == PCW_OK; i++)
-        status = pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + i, 0, PCW_TSRESOL_NANO, "hid", NULL);
+        status = pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + i, 0, PCW_TSRESOL_NANO, &if_name, 1, NULL);
     for (i = 0; i < 6 && status == PCW_OK; i++)
-        status = pcw_writer_packet(writer, i, i, i, payload, sizeof(payload), sizeof(payload));
+        status = pcw_writer_packet(writer, i, i, i, payload, sizeof(payload), sizeof(payload), NULL, 0);
     pcw_writer_destroy(writer);
     return status;
 }
@@ -909,6 +1087,9 @@ int main(void)
     test_pcap_big_endian();
     test_fcs();
     test_epb_fcs();
+    test_writer_options();
+    test_writer_options_pcap();
+    test_writer_bad_options();
     test_pcapng_crafted();
     test_invalid_interface();
     test_truncated();

@@ -71,12 +71,16 @@ int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned c
     return status;
 }
 
-static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned char *fixed, size_t fixed_len, const unsigned char *data, size_t data_len, const unsigned char *opts, size_t opts_len)
+static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned char *fixed, size_t fixed_len, const unsigned char *data, size_t data_len, const unsigned char *opts, size_t opts_len, const pcw_optlist_t *list)
 {
     unsigned char word[8];
-    uint64_t total = (uint64_t)12u + fixed_len + data_len + pcw_pad4(data_len) + opts_len + pcw_pad4(opts_len);
-    int status;
+    size_t list_len;
+    uint64_t total;
+    int status = pcw_optlist_check(list, &list_len);
 
+    if (status != PCW_OK)
+        return status;
+    total = (uint64_t)12u + fixed_len + data_len + pcw_pad4(data_len) + opts_len + pcw_pad4(opts_len) + list_len;
     if (total > UINT32_MAX)
         return PCW_ERR_ARG;
     pcw_wr32(word, type, writer->big_endian);
@@ -92,6 +96,8 @@ static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned 
         status = pcw_emit(writer, opts, opts_len);
     if (status == PCW_OK)
         status = pcw_emit_zeros(writer, pcw_pad4(opts_len));
+    if (status == PCW_OK)
+        status = pcw_optlist_emit(writer, list);
     if (status == PCW_OK)
         status = pcw_emit(writer, word + 4, 4);
     return status;
@@ -115,49 +121,40 @@ int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block)
     pcw_wr16(fixed + 6, copy ? block->version_minor : 0, big);
     pcw_wr64(fixed + 8, copy ? (uint64_t)block->section_len : UINT64_MAX, big);
     if (!copy)
-        return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, NULL, 0);
-    return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, block->options, block->options_len);
+        return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, NULL, 0, NULL);
+    return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, block->options, block->options_len, NULL);
 }
 
-static size_t pcw_put_option(unsigned char *dst, uint16_t code, const void *value, size_t value_len, int big)
+static int pcw_write_idb_fresh(pcw_writer_t *writer, const unsigned char *fixed, const pcw_iface_t *iface, const pcw_optlist_t *list)
 {
-    pcw_wr16(dst, code, big);
-    pcw_wr16(dst + 2, (uint16_t)value_len, big);
-    if (value_len > 0)
-        memcpy(dst + 4, value, value_len);
-    memset(dst + 4 + value_len, 0, pcw_pad4(value_len));
-    return 4 + value_len + pcw_pad4(value_len);
-}
-
-static int pcw_write_idb_fresh(pcw_writer_t *writer, const unsigned char *fixed, const pcw_iface_t *iface, const char *name)
-{
-    size_t name_len = name ? strlen(name) : 0;
-    int fcs = iface->has_fcs && iface->fcs_bits <= UINT8_MAX;
-    size_t opts_len = 4 + (name_len ? 4 + name_len + pcw_pad4(name_len) : 0) + (iface->ts_resol != PCW_TSRESOL_MICRO ? 8 : 0) + (fcs ? 8 : 0);
+    pcw_optlist_t all = {PCW_BLOCK_IDB, NULL, 0};
+    pcw_option_t *items;
+    size_t given = list != NULL ? list->count : 0;
+    size_t unused;
     unsigned char resol = (unsigned char)iface->ts_resol;
-    unsigned char fcs_bits = (unsigned char)iface->fcs_bits;
-    unsigned char *opts;
-    size_t pos = 0;
-    int status;
+    int status = pcw_optlist_check(list, &unused);
 
-    if (name_len > UINT16_MAX)
-        return PCW_ERR_ARG;
-    opts = writer->mem.alloc_fn(writer->mem.ctx, opts_len);
-    if (opts == NULL)
+    if (status != PCW_OK)
+        return status;
+    items = writer->mem.alloc_fn(writer->mem.ctx, (given + 1) * sizeof(*items));
+    if (items == NULL)
         return PCW_ERR_NOMEM;
-    if (name_len)
-        pos += pcw_put_option(opts, PCW_OPT_IF_NAME, name, name_len, writer->big_endian);
-    if (iface->ts_resol != PCW_TSRESOL_MICRO)
-        pos += pcw_put_option(opts + pos, PCW_OPT_IF_TSRESOL, &resol, 1, writer->big_endian);
-    if (fcs)
-        pos += pcw_put_option(opts + pos, PCW_OPT_IF_FCSLEN, &fcs_bits, 1, writer->big_endian);
-    pcw_put_option(opts + pos, PCW_OPT_END, NULL, 0, writer->big_endian);
-    status = pcw_write_framed(writer, PCW_BLOCK_IDB, fixed, 8, NULL, 0, opts, opts_len);
-    writer->mem.free_fn(writer->mem.ctx, opts);
+    if (given > 0)
+        memcpy(items, list->items, given * sizeof(*items));
+    all.items = items;
+    all.count = given;
+    if (iface->ts_resol != PCW_TSRESOL_MICRO) {
+        items[given].code = PCW_OPT_IF_TSRESOL;
+        items[given].value = &resol;
+        items[given].value_len = 1;
+        all.count++;
+    }
+    status = pcw_write_framed(writer, PCW_BLOCK_IDB, fixed, 8, NULL, 0, NULL, 0, &all);
+    writer->mem.free_fn(writer->mem.ctx, items);
     return status;
 }
 
-int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const char *name, const pcw_block_t *block)
+int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_optlist_t *list, const pcw_block_t *block)
 {
     unsigned char fixed[8] = {0};
 
@@ -166,11 +163,11 @@ int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const char *na
     pcw_wr16(fixed, (uint16_t)iface->linktype, writer->big_endian);
     pcw_wr32(fixed + 4, iface->snaplen, writer->big_endian);
     if (pcw_same_order(writer, block))
-        return pcw_write_framed(writer, PCW_BLOCK_IDB, fixed, sizeof(fixed), NULL, 0, block->options, block->options_len);
-    return pcw_write_idb_fresh(writer, fixed, iface, name);
+        return pcw_write_framed(writer, PCW_BLOCK_IDB, fixed, sizeof(fixed), NULL, 0, block->options, block->options_len, NULL);
+    return pcw_write_idb_fresh(writer, fixed, iface, list);
 }
 
-int pcw_write_epb(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const pcw_block_t *block)
+int pcw_write_epb(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const pcw_block_t *block, const pcw_optlist_t *list)
 {
     unsigned char fixed[20];
     int big = writer->big_endian;
@@ -184,8 +181,8 @@ int pcw_write_epb(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, c
     pcw_wr32(fixed + 12, (uint32_t)block->data_len, big);
     pcw_wr32(fixed + 16, (uint32_t)block->orig_len, big);
     if (!keep_options)
-        return pcw_write_framed(writer, PCW_BLOCK_EPB, fixed, sizeof(fixed), block->data, block->data_len, NULL, 0);
-    return pcw_write_framed(writer, PCW_BLOCK_EPB, fixed, sizeof(fixed), block->data, block->data_len, block->options, block->options_len);
+        return pcw_write_framed(writer, PCW_BLOCK_EPB, fixed, sizeof(fixed), block->data, block->data_len, NULL, 0, list);
+    return pcw_write_framed(writer, PCW_BLOCK_EPB, fixed, sizeof(fixed), block->data, block->data_len, block->options, block->options_len, NULL);
 }
 
 int pcw_write_spb(pcw_writer_t *writer, const pcw_block_t *block)
@@ -195,10 +192,10 @@ int pcw_write_spb(pcw_writer_t *writer, const pcw_block_t *block)
     if (block->orig_len > UINT32_MAX)
         return PCW_ERR_ARG;
     pcw_wr32(fixed, (uint32_t)block->orig_len, writer->big_endian);
-    return pcw_write_framed(writer, PCW_BLOCK_SPB, fixed, sizeof(fixed), block->data, block->data_len, NULL, 0);
+    return pcw_write_framed(writer, PCW_BLOCK_SPB, fixed, sizeof(fixed), block->data, block->data_len, NULL, 0, NULL);
 }
 
 int pcw_write_raw(pcw_writer_t *writer, uint32_t type, const unsigned char *body, size_t body_len)
 {
-    return pcw_write_framed(writer, type, NULL, 0, body, body_len, NULL, 0);
+    return pcw_write_framed(writer, type, NULL, 0, body, body_len, NULL, 0, NULL);
 }

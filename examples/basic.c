@@ -30,6 +30,7 @@ static int membuf_write(void *ctx, const unsigned char *data, size_t data_len)
 static int write_capture(membuf_t *out)
 {
     static const unsigned char report[] = {0xa1, 0x01, 0x80, 0x80, 0x7f, 0x7f, 0x00, 0x08};
+    static const pcw_option_t if_name = {PCW_OPT_IF_NAME, "gamepad", 7};
     pcw_writer_t *writer = NULL;
     uint32_t iface = 0;
     int status;
@@ -39,9 +40,9 @@ static int write_capture(membuf_t *out)
     if (status == PCW_OK)
         status = pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, out);
     if (status == PCW_OK)
-        status = pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, "gamepad", &iface);
+        status = pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, &if_name, 1, &iface);
     for (i = 0; i < 3 && status == PCW_OK; i++)
-        status = pcw_writer_packet(writer, iface, 1700000000 + i, 250000000u * (uint32_t)i, report, sizeof(report), sizeof(report));
+        status = pcw_writer_packet(writer, iface, 1700000000 + i, 250000000u * (uint32_t)i, report, sizeof(report), sizeof(report), NULL, 0);
     pcw_writer_destroy(writer);
     return status;
 }

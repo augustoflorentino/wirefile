@@ -21,15 +21,16 @@ static int sink_write(void *ctx, const unsigned char *data, size_t data_len)
 
 static int write_one(sink_t *sink)
 {
+    static const pcw_option_t if_name = {PCW_OPT_IF_NAME, "hid", 3};
     pcw_writer_t *writer = NULL;
     int status = pcw_writer_create(NULL, NULL, NULL, &writer);
 
     if (status == PCW_OK)
         status = pcw_writer_open(writer, PCW_FORMAT_PCAPNG, sink_write, sink);
     if (status == PCW_OK)
-        status = pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, "hid", NULL);
+        status = pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, &if_name, 1, NULL);
     if (status == PCW_OK)
-        status = pcw_writer_packet(writer, 0, 1, 2, "abc", 3, 3);
+        status = pcw_writer_packet(writer, 0, 1, 2, "abc", 3, 3, NULL, 0);
     pcw_writer_destroy(writer);
     return status;
 }
