@@ -1,0 +1,36 @@
+name: A capture wirefile gets wrong
+description: A file that reads, copies or converts differently from Wireshark or tshark
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Attach the capture if you can share it. If not, the first bytes and the block that
+        goes wrong, in hex, are usually enough (`xxd file.pcapng | head -40`).
+  - type: textarea
+    id: capture
+    attributes:
+      label: Capture
+      description: The file, or a hex excerpt of it
+    validations:
+      required: true
+  - type: input
+    id: producer
+    attributes:
+      label: What wrote the file
+      placeholder: dumpcap 4.4, tcpdump 4.99, USBPcap, a custom logger
+    validations:
+      required: true
+  - type: textarea
+    id: difference
+    attributes:
+      label: What wirefile does, and what you expected
+      description: pcwdump output, or the call and the status it returned
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: wirefile version and platform
+      placeholder: 2.2.0 on Debian 13, gcc 14

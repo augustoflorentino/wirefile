@@ -1,0 +1,17 @@
+name: Block type, option or link type
+description: Something in the pcap or pcapng specs that wirefile should handle
+labels: [enhancement]
+body:
+  - type: input
+    id: spec
+    attributes:
+      label: Where it is defined
+      placeholder: draft-ietf-opsawg-pcapng section 4.3, or the tcpdump link-types list
+    validations:
+      required: true
+  - type: textarea
+    id: use
+    attributes:
+      label: What you would do with it
+    validations:
+      required: true
