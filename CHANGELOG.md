@@ -4,6 +4,29 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 1.0.0 - 2026-04-17
+
+Incompatible change: the writer takes pcapng options. From this release on the API and ABI
+are stable within 1.x, checked against the baseline in `abi/`.
+
+- `pcw_writer_add_interface` takes a list of options in place of `name`, and
+  `pcw_writer_packet` takes one too. Before, the interface name was the only option a new
+  capture could have: no description, speed, FCS length or OS, and no packet direction,
+  comment or flags, which a capture of HID or USB traffic needs to tell host to device from
+  device to host. Numbers in fixed size options go in host byte order and come out in the
+  file's
+- `pcw_option_t`, `PCW_EPB_INBOUND`, `PCW_EPB_OUTBOUND` and names for the other options of
+  the spec (`PCW_OPT_IF_SPEED`, `PCW_OPT_IF_OS`, `PCW_OPT_EPB_PACKETID` and so on)
+- soname `libwirefile.so.1`
+
+### Upgrading
+
+- `pcw_writer_add_interface(w, lt, snap, resol, "eth0", &id)` becomes
+  `pcw_writer_add_interface(w, lt, snap, resol, &name, 1, &id)` with
+  `pcw_option_t name = {PCW_OPT_IF_NAME, "eth0", 4};`, or `NULL, 0` where the name was `NULL`
+- add `, NULL, 0` at the end of each `pcw_writer_packet` call
+- rebuild; programs linked to `libwirefile.so.0` keep using the old library
+
 ## 0.2.0 - 2026-04-09
 
 Adds to the API; existing code builds and links unchanged.
