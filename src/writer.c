@@ -102,6 +102,18 @@ static int pcw_writer_ng_iface(pcw_writer_t *writer, const pcw_iface_t *iface, c
     return pcw_write_idb(writer, iface, list, block);
 }
 
+static int pcw_writer_ng_iface_converted(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_block_t *block)
+{
+    int status;
+
+    if (iface->linktype > UINT16_MAX)
+        return PCW_ERR_ARG;
+    status = pcw_iface_add(&writer->mem, &writer->ifaces, iface);
+    if (status != PCW_OK)
+        return status;
+    return pcw_write_idb_converted(writer, iface, block);
+}
+
 static int pcw_writer_ng_copy_iface(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_block_t *block)
 {
     unsigned char bits = (unsigned char)iface->fcs_bits;
@@ -139,7 +151,7 @@ int pcw_writer_add_interface(pcw_writer_t *writer, uint32_t linktype, uint32_t s
     return status;
 }
 
-static int pcw_writer_units(const pcw_iface_t *iface, const pcw_block_t *block, uint64_t *out_units)
+int pcw_writer_units(const pcw_iface_t *iface, const pcw_block_t *block, uint64_t *out_units)
 {
     if (block->format != 0 && block->ts_resol == iface->ts_resol && block->ts_offset == iface->ts_offset) {
         *out_units = block->ts_raw;
@@ -157,6 +169,8 @@ static int pcw_writer_ng_packet(pcw_writer_t *writer, uint32_t interface_id, uin
         return pcw_write_spb(writer, block);
     if (block->type == PCW_BLOCK_PB && same_order && !truncated)
         return pcw_write_raw(writer, PCW_BLOCK_PB, block->body, block->body_len);
+    if (block->format == PCW_FORMAT_PCAPNG && !same_order && !truncated)
+        return pcw_write_epb_converted(writer, interface_id, units, block);
     return pcw_write_epb(writer, interface_id, units, block, list);
 }
 
@@ -250,9 +264,12 @@ static int pcw_writer_interface(pcw_writer_t *writer, const pcw_block_t *block)
     if (writer->format == PCW_FORMAT_PCAPNG) {
         if (!writer->started)
             return PCW_ERR_STATE;
-        if (!same_order)
-            iface.ts_offset = 0;
-        return pcw_writer_ng_copy_iface(writer, &iface, same_order ? block : NULL);
+        if (same_order)
+            return pcw_writer_ng_copy_iface(writer, &iface, block);
+        iface.ts_offset = 0;
+        if (block->format != PCW_FORMAT_PCAPNG)
+            return pcw_writer_ng_copy_iface(writer, &iface, NULL);
+        return pcw_writer_ng_iface_converted(writer, &iface, block);
     }
     if (writer->started)
         return writer->ifaces.items[0].linktype == iface.linktype ? PCW_OK : PCW_ERR_FORMAT;
@@ -266,10 +283,12 @@ static int pcw_writer_extra(pcw_writer_t *writer, const pcw_block_t *block)
 {
     int same_order = block->format == PCW_FORMAT_PCAPNG && ((block->flags & PCW_FLAG_BIG_ENDIAN) != 0) == writer->big_endian;
 
-    if (writer->format == PCW_FORMAT_PCAP || !same_order)
+    if (writer->format == PCW_FORMAT_PCAP || block->format != PCW_FORMAT_PCAPNG)
         return PCW_OK;
     if (!writer->started)
         return PCW_ERR_STATE;
+    if (!same_order)
+        return pcw_write_extra_converted(writer, block);
     return pcw_write_raw(writer, block->type, block->body, block->body_len);
 }
 

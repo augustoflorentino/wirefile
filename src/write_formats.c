@@ -195,6 +195,11 @@ int pcw_write_spb(pcw_writer_t *writer, const pcw_block_t *block)
     return pcw_write_framed(writer, PCW_BLOCK_SPB, fixed, sizeof(fixed), block->data, block->data_len, NULL, 0, NULL);
 }
 
+int pcw_write_listed(pcw_writer_t *writer, uint32_t type, const unsigned char *fixed, size_t fixed_len, const unsigned char *data, size_t data_len, const pcw_optlist_t *list)
+{
+    return pcw_write_framed(writer, type, fixed, fixed_len, data, data_len, NULL, 0, list);
+}
+
 int pcw_write_raw(pcw_writer_t *writer, uint32_t type, const unsigned char *body, size_t body_len)
 {
     return pcw_write_framed(writer, type, NULL, 0, body, body_len, NULL, 0, NULL);

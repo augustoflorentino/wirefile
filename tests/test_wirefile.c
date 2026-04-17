@@ -715,6 +715,115 @@ static void test_writer_bad_options(void)
     free(out.data);
 }
 
+static void put_numbers_option(builder_t *body, uint16_t code, uint64_t first, size_t first_width, uint64_t second, size_t second_width, const char *text)
+{
+    builder_t value = body_of(body);
+
+    put_uint(&value, first, first_width);
+    if (second_width > 0)
+        put_uint(&value, second, second_width);
+    if (text != NULL)
+        put_bytes(&value, text, strlen(text));
+    put_option(body, code, value.buf.data, value.buf.len);
+    free(value.buf.data);
+}
+
+static builder_t big_endian_extras(void)
+{
+    builder_t b = {{NULL, 0, 0}, 1};
+    builder_t idb = body_of(&b);
+    builder_t epb = body_of(&b);
+    builder_t isb = body_of(&b);
+
+    put_shb(&b);
+    put_uint(&idb, PCW_LINKTYPE_USER0, 2);
+    put_uint(&idb, 0, 6);
+    put_numbers_option(&idb, 2988, 0x7ED9, 4, 0, 0, "hi");
+    put_numbers_option(&idb, PCW_OPT_IF_SPEED, 12000000, 8, 0, 0, NULL);
+    put_option(&idb, PCW_OPT_END, NULL, 0);
+    put_block(&b, PCW_BLOCK_IDB, &idb);
+    put_uint(&epb, 0, 4);
+    put_uint(&epb, 0, 4);
+    put_uint(&epb, 5, 4);
+    put_uint(&epb, 1, 4);
+    put_uint(&epb, 1, 4);
+    put_bytes(&epb, payload, 1);
+    put_pad(&epb);
+    put_numbers_option(&epb, PCW_OPT_EPB_FLAGS, PCW_EPB_OUTBOUND, 4, 0, 0, NULL);
+    put_numbers_option(&epb, 7, 2, 1, 0, 0, NULL);
+    put_option(&epb, PCW_OPT_END, NULL, 0);
+    put_block(&b, PCW_BLOCK_EPB, &epb);
+    put_uint(&isb, 0, 4);
+    put_uint(&isb, 0, 4);
+    put_uint(&isb, 9, 4);
+    put_numbers_option(&isb, 2, 0, 4, 3, 4, NULL);
+    put_numbers_option(&isb, 4, 77, 8, 0, 0, NULL);
+    put_option(&isb, PCW_OPT_END, NULL, 0);
+    put_block(&b, PCW_BLOCK_ISB, &isb);
+    free(idb.buf.data);
+    free(epb.buf.data);
+    free(isb.buf.data);
+    return b;
+}
+
+static void check_converted_extras(const membuf_t *out)
+{
+    static const unsigned char custom[6] = {0xD9, 0x7E, 0, 0, 'h', 'i'};
+    pcw_reader_t *reader = open_mem_reader(out->data, out->len);
+    const pcw_block_t *block;
+    const unsigned char *value;
+    size_t value_len;
+
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(!(block->flags & PCW_FLAG_BIG_ENDIAN));
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->kind == PCW_KIND_INTERFACE && option_is(block, 2988, custom, sizeof(custom)));
+    CHECK_STATUS(pcw_option_find(block, PCW_OPT_IF_SPEED, &value, &value_len), PCW_OK);
+    CHECK(pcw_get_u64(block, value) == 12000000);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->kind == PCW_KIND_PACKET && block->ts_nsec == 5000 && block->data_len == 1);
+    CHECK_STATUS(pcw_option_find(block, PCW_OPT_EPB_FLAGS, &value, &value_len), PCW_OK);
+    CHECK(pcw_get_u32(block, value) == PCW_EPB_OUTBOUND);
+    CHECK_STATUS(pcw_option_find(block, 7, &value, &value_len), PCW_END);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->kind == PCW_KIND_STATS && block->ts_nsec == 9000);
+    CHECK_STATUS(pcw_option_find(block, 2, &value, &value_len), PCW_OK);
+    CHECK(value_len == 8 && pcw_get_u32(block, value) == 0 && pcw_get_u32(block, value + 4) == 3);
+    CHECK_STATUS(pcw_option_find(block, 4, &value, &value_len), PCW_OK);
+    CHECK(pcw_get_u64(block, value) == 77);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    pcw_reader_destroy(reader);
+}
+
+static void test_cross_order_copy(void)
+{
+    builder_t source = big_endian_extras();
+    builder_t section = {{NULL, 0, 0}, 0};
+    pcw_reader_t *section_reader;
+    pcw_reader_t *reader;
+    pcw_writer_t *writer = NULL;
+    const pcw_block_t *block;
+    membuf_t out = {NULL, 0, 0};
+
+    put_shb(&section);
+    section_reader = open_mem_reader(section.buf.data, section.buf.len);
+    CHECK_STATUS(pcw_reader_next(section_reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_block(writer, block), PCW_OK);
+    reader = open_mem_reader(source.buf.data, source.buf.len);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    while (pcw_reader_next(reader, &block) == PCW_OK)
+        CHECK_STATUS(pcw_writer_block(writer, block), PCW_OK);
+    pcw_writer_destroy(writer);
+    pcw_reader_destroy(reader);
+    pcw_reader_destroy(section_reader);
+    check_converted_extras(&out);
+    free(out.data);
+    free(source.buf.data);
+    free(section.buf.data);
+}
+
 static void expect_truncated(const membuf_t *in, size_t cut, size_t data_len, size_t trailing)
 {
     pcw_reader_t *reader = open_mem_reader(in->data, in->len - cut);
@@ -1090,6 +1199,7 @@ int main(void)
     test_writer_options();
     test_writer_options_pcap();
     test_writer_bad_options();
+    test_cross_order_copy();
     test_pcapng_crafted();
     test_invalid_interface();
     test_truncated();

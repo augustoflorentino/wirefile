@@ -15,6 +15,7 @@ add_library(wirefile
     src/reader.c
     src/timestamp.c
     src/util.c
+    src/write_convert.c
     src/write_formats.c
     src/write_options.c
     src/writer.c)

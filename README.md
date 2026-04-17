@@ -164,8 +164,8 @@ byte order it had.
 - options are a list of `{code, value, value_len}`, or `NULL, 0` for none. The numbers of the
   options the pcapng spec gives a fixed size (`if_speed`, `if_tzone`, `if_fcslen`,
   `if_txspeed`, `if_rxspeed`, `epb_flags`, `epb_dropcount`, `epb_packetid`, `epb_queue`,
-  `epb_processid_threadid`) are given in host byte order and written in the file's; any other
-  option is written as given. `PCW_ERR_ARG`, with nothing written, for code 0, a value over
+  `epb_processid_threadid`, and the enterprise number that starts a custom option) are given
+  in host byte order and written in the file's; any other option is written as given. `PCW_ERR_ARG`, with nothing written, for code 0, a value over
   65535 bytes, a fixed size option of another size, and `if_tsresol` or `if_tsoffset`, which
   come from `ts_resol`
 - pcap keeps only `if_fcslen`, in the file header; it drops the other options
@@ -175,8 +175,13 @@ byte order it had.
   length goes both ways between the pcap header and `if_fcslen`. pcapng to pcap
   keeps the packets under the first interface; it fails with `PCW_ERR_FORMAT` at an
   interface with another link type, and drops options, name records, statistics and custom
-  blocks, which pcap cannot hold. Blocks mixed in from a source in the other byte order lose
-  their options, name records, statistics and custom blocks, whose bytes cannot be reordered
+  blocks, which pcap cannot hold. Blocks copied from a source in the other byte order, as when
+  merging captures from different machines, are rewritten in the writer's order: interfaces,
+  packets, name records and statistics keep every option the spec defines, and custom options
+  get their enterprise number reordered and their data copied as is, as the spec says. Options,
+  name records and blocks of unknown types, `epb_verdict`, and custom blocks are dropped,
+  since their bytes cannot be reordered without knowing them. Statistics keep `isb_starttime`
+  and `isb_endtime` only when the interface had no `if_tsoffset`
 - `pcw_writer_offset` is the number of bytes written so far
 
 ### Link types
