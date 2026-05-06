@@ -67,7 +67,7 @@ static void walk_block(const pcw_block_t *block)
         sum += block->data[block->data_len - 1];
 }
 
-static int drain(pcw_reader_t *reader, pcw_writer_t *writer)
+static int drain(pcw_reader_t *reader, pcw_writer_t *writer, int skip_sections)
 {
     const pcw_block_t *block;
     uint64_t last_error = UINT64_MAX;
@@ -88,7 +88,7 @@ static int drain(pcw_reader_t *reader, pcw_writer_t *writer)
             continue;
         }
         walk_block(block);
-        if (writer != NULL)
+        if (writer != NULL && !(skip_sections && block->kind == PCW_KIND_SECTION))
             pcw_writer_block(writer, block);
     }
     if (rounds == 100000)
@@ -105,7 +105,7 @@ static void read_stream(const uint8_t *data, size_t size)
         return;
     pcw_reader_set_limits(reader, 64, 4);
     pcw_reader_open_stream(reader, source_read, &src);
-    drain(reader, NULL);
+    drain(reader, NULL, 0);
     pcw_reader_destroy(reader);
 }
 
@@ -116,12 +116,12 @@ static void reread(const sink_t *sink)
     if (sink->len == 0 || pcw_reader_create(NULL, NULL, NULL, &reader) != PCW_OK)
         return;
     pcw_reader_open_mem(reader, sink->data, sink->len);
-    if (drain(reader, NULL) != 0)
+    if (drain(reader, NULL, 0) != 0)
         abort();
     pcw_reader_destroy(reader);
 }
 
-static void copy_mem(const uint8_t *data, size_t size, uint32_t format)
+static void copy_mem(const uint8_t *data, size_t size, uint32_t format, int own_section)
 {
     pcw_reader_t *reader = NULL;
     pcw_writer_t *writer = NULL;
@@ -130,7 +130,9 @@ static void copy_mem(const uint8_t *data, size_t size, uint32_t format)
     if (pcw_reader_create(NULL, NULL, NULL, &reader) == PCW_OK && pcw_writer_create(NULL, NULL, NULL, &writer) == PCW_OK) {
         pcw_reader_open_mem(reader, data, size);
         pcw_writer_open(writer, format, sink_write, &sink);
-        drain(reader, writer);
+        if (own_section)
+            pcw_writer_add_interface(writer, 147, 0, 9, NULL, 0, NULL);
+        drain(reader, writer, own_section);
         reread(&sink);
     }
     pcw_writer_destroy(writer);
@@ -143,7 +145,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size);
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     read_stream(data, size);
-    copy_mem(data, size, PCW_FORMAT_PCAP);
-    copy_mem(data, size, PCW_FORMAT_PCAPNG);
+    copy_mem(data, size, PCW_FORMAT_PCAP, 0);
+    copy_mem(data, size, PCW_FORMAT_PCAPNG, 0);
+    copy_mem(data, size, PCW_FORMAT_PCAPNG, 1);
     return 0;
 }
