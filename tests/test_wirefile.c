@@ -955,6 +955,29 @@ static void write_with_big_packet(uint32_t format, membuf_t *out)
     pcw_writer_destroy(writer);
 }
 
+static void test_limit_at_end(void)
+{
+    uint32_t format;
+
+    for (format = PCW_FORMAT_PCAP; format <= PCW_FORMAT_PCAPNG; format++) {
+        membuf_t out = {NULL, 0, 0};
+        source_t src;
+        pcw_reader_t *reader;
+        const pcw_block_t *block;
+        int status;
+
+        write_with_big_packet(format, &out);
+        src = (source_t){out.data, out.len - 200, 0, 7};
+        reader = open_stream_reader(&src, 64, 4);
+        while ((status = pcw_reader_next(reader, &block)) == PCW_OK)
+            continue;
+        CHECK_STATUS(status, PCW_END);
+        CHECK(pcw_reader_trailing(reader) > 0);
+        pcw_reader_destroy(reader);
+        free(out.data);
+    }
+}
+
 static void test_limits(void)
 {
     uint32_t format;
@@ -1206,6 +1229,7 @@ int main(void)
     test_bad_input();
     test_read_callback_errors();
     test_limits();
+    test_limit_at_end();
     test_huge_lengths();
     test_interface_limit();
     test_writer_errors();

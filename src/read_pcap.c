@@ -113,7 +113,7 @@ int pcw_read_pcap_record(pcw_reader_t *reader)
     total = wide > SIZE_MAX ? SIZE_MAX : (size_t)wide;
     if (reader->stream && total > reader->max_block_len) {
         status = pcw_skip(reader, total);
-        return status == PCW_OK ? PCW_ERR_LIMIT : pcw_stop(reader, status == PCW_END ? PCW_END : status);
+        return status == PCW_OK ? PCW_ERR_LIMIT : pcw_stop(reader, status);
     }
     status = pcw_fill(reader, total);
     if (status == PCW_END)

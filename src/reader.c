@@ -172,13 +172,16 @@ void pcw_consume(pcw_reader_t *reader, size_t len)
 
 int pcw_skip(pcw_reader_t *reader, size_t len)
 {
+    size_t skipped = 0;
     size_t take;
     int status;
 
     while (len > 0) {
         if (reader->end == reader->pos) {
-            if (reader->eof)
+            if (reader->eof) {
+                reader->trailing = skipped;
                 return PCW_END;
+            }
             status = pcw_read_more(reader);
             if (status != PCW_OK)
                 return status;
@@ -186,6 +189,7 @@ int pcw_skip(pcw_reader_t *reader, size_t len)
         }
         take = reader->end - reader->pos < len ? reader->end - reader->pos : len;
         pcw_consume(reader, take);
+        skipped += take;
         len -= take;
     }
     return PCW_OK;
