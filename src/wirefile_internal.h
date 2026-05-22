@@ -131,7 +131,7 @@ PCW_LOCAL int pcw_write_raw(pcw_writer_t *writer, uint32_t type, const unsigned 
 PCW_LOCAL int pcw_optlist_user_check(const pcw_optlist_t *list);
 PCW_LOCAL int pcw_optlist_check(const pcw_optlist_t *list, size_t *out_len);
 PCW_LOCAL int pcw_optlist_emit(pcw_writer_t *writer, const pcw_optlist_t *list);
-PCW_LOCAL int pcw_optlist_reorder(const pcw_mem_t *mem, const pcw_block_t *block, uint32_t block_type, int keep_times, pcw_optlist_t *out, void **out_mem);
+PCW_LOCAL int pcw_optlist_reorder(const pcw_mem_t *mem, const pcw_block_t *block, uint32_t block_type, int keep_times, int to_big, pcw_optlist_t *out, void **out_mem);
 PCW_LOCAL int pcw_optlist_find(const pcw_optlist_t *list, uint16_t code, const pcw_option_t **out_opt);
 
 #endif

@@ -164,8 +164,8 @@ byte order it had.
 - options are a list of `{code, value, value_len}`, or `NULL, 0` for none. The numbers of the
   options the pcapng spec gives a fixed size (`if_speed`, `if_tzone`, `if_fcslen`,
   `if_txspeed`, `if_rxspeed`, `epb_flags`, `epb_dropcount`, `epb_packetid`, `epb_queue`,
-  `epb_processid_threadid`, and the enterprise number that starts a custom option) are given
-  in host byte order and written in the file's; any other option is written as given. `PCW_ERR_ARG`, with nothing written, for code 0, a value over
+  `epb_processid_threadid`) are given in host byte order and written in the file's; any other
+  option, custom ones included, is written as given. `PCW_ERR_ARG`, with nothing written, for code 0, a value over
   65535 bytes, a fixed size option of another size, and `if_tsresol` or `if_tsoffset`, which
   come from `ts_resol`
 - pcap keeps only `if_fcslen`, in the file header; it drops the other options

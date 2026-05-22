@@ -159,6 +159,8 @@ static int pcw_opt_emit(pcw_writer_t *writer, uint32_t block_type, const pcw_opt
     pcw_wr16(head, opt->code, writer->big_endian);
     pcw_wr16(head + 2, (uint16_t)opt->value_len, writer->big_endian);
     status = pcw_emit(writer, head, 4);
+    if (shape != NULL && shape->prefix)
+        fixed = 0;
     for (i = 0; fixed > 0 && i < shape->count; i++)
         pcw_opt_order(head + i * shape->width, value + i * shape->width, shape->width, writer->big_endian);
     if (status == PCW_OK)
@@ -229,13 +231,15 @@ static int pcw_opt_portable(uint32_t block_type, uint16_t code, size_t value_len
     return keep_times || block_type != PCW_BLOCK_ISB || (code != PCW_OPT_ISB_STARTTIME && code != PCW_OPT_ISB_ENDTIME);
 }
 
-static void pcw_opt_copy_host(pcw_option_t *dst, unsigned char *buf, uint32_t block_type, uint16_t code, const unsigned char *value, size_t value_len, int big)
+static void pcw_opt_copy_host(pcw_option_t *dst, unsigned char *buf, uint32_t block_type, uint16_t code, const unsigned char *value, size_t value_len, int big, int to_big)
 {
     const pcw_opt_shape_t *shape = pcw_opt_shape(block_type, code);
     size_t fixed = pcw_opt_fixed(shape);
     unsigned i;
 
-    for (i = 0; fixed > 0 && i < shape->count; i++)
+    if (shape != NULL && shape->prefix)
+        pcw_wr32(buf, pcw_rd32(value, big), to_big);
+    for (i = 0; fixed > 0 && !shape->prefix && i < shape->count; i++)
         pcw_opt_to_host(buf + i * shape->width, value + i * shape->width, shape->width, big);
     if (value_len > fixed)
         memcpy(buf + fixed, value + fixed, value_len - fixed);
@@ -257,7 +261,7 @@ static size_t pcw_opt_count(const pcw_block_t *block)
     return count;
 }
 
-int pcw_optlist_reorder(const pcw_mem_t *mem, const pcw_block_t *block, uint32_t block_type, int keep_times, pcw_optlist_t *out, void **out_mem)
+int pcw_optlist_reorder(const pcw_mem_t *mem, const pcw_block_t *block, uint32_t block_type, int keep_times, int to_big, pcw_optlist_t *out, void **out_mem)
 {
     size_t count = pcw_opt_count(block);
     int big = (block->flags & PCW_FLAG_BIG_ENDIAN) != 0;
@@ -283,7 +287,7 @@ int pcw_optlist_reorder(const pcw_mem_t *mem, const pcw_block_t *block, uint32_t
     while (pcw_option_next(block, &pos, &code, &value, &value_len) == PCW_OK) {
         if (!pcw_opt_portable(block_type, code, value_len, keep_times))
             continue;
-        pcw_opt_copy_host(&items[out->count++], buf, block_type, code, value, value_len, big);
+        pcw_opt_copy_host(&items[out->count++], buf, block_type, code, value, value_len, big, to_big);
         buf += value_len;
     }
     out->items = items;

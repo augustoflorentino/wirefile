@@ -15,7 +15,7 @@ int pcw_write_epb_converted(pcw_writer_t *writer, uint32_t interface_id, uint64_
 {
     pcw_optlist_t list;
     void *mem;
-    int status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_EPB, 1, &list, &mem);
+    int status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_EPB, 1, writer->big_endian, &list, &mem);
 
     if (status == PCW_OK)
         status = pcw_write_epb(writer, interface_id, units, block, &list);
@@ -27,7 +27,7 @@ int pcw_write_idb_converted(pcw_writer_t *writer, const pcw_iface_t *iface, cons
 {
     pcw_optlist_t list;
     void *mem;
-    int status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_IDB, 1, &list, &mem);
+    int status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_IDB, 1, writer->big_endian, &list, &mem);
 
     if (status == PCW_OK)
         status = pcw_write_idb(writer, iface, &list, NULL);
@@ -49,7 +49,7 @@ static int pcw_convert_isb(pcw_writer_t *writer, const pcw_block_t *block)
     status = pcw_writer_units(iface, block, &units);
     if (status != PCW_OK)
         return status;
-    status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_ISB, block->ts_resol == iface->ts_resol && block->ts_offset == iface->ts_offset, &list, &mem);
+    status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_ISB, block->ts_resol == iface->ts_resol && block->ts_offset == iface->ts_offset, writer->big_endian, &list, &mem);
     if (status != PCW_OK)
         return status;
     pcw_wr32(fixed, block->interface_id, writer->big_endian);
@@ -95,7 +95,7 @@ static int pcw_convert_nrb(pcw_writer_t *writer, const pcw_block_t *block)
     if (records == NULL)
         return PCW_ERR_NOMEM;
     records_len = pcw_convert_records(writer, block, records);
-    status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_NRB, 1, &list, &mem);
+    status = pcw_optlist_reorder(&writer->mem, block, PCW_BLOCK_NRB, 1, writer->big_endian, &list, &mem);
     if (status == PCW_OK)
         status = pcw_write_listed(writer, PCW_BLOCK_NRB, NULL, 0, records, records_len, &list);
     pcw_convert_free(writer, mem);
