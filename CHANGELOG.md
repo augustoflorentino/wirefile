@@ -4,6 +4,19 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 1.3.0 - 2026-05-28
+
+- Blocks copied from a pcapng source in the other byte order, as when merging captures made
+  on machines of different endianness, keep what the spec lets a writer reorder: every
+  option of interfaces and packets, name records of the four known types, and interface
+  statistics with their options. Before, the copy kept only the packet bytes and timestamps,
+  and dropped name and statistics blocks. Custom options keep their data as is, with the
+  enterprise number reordered, as the spec asks
+- A stream reader that skips an oversized block cut short by the end of the input now counts
+  the skipped bytes in `pcw_reader_trailing`; before it reported 0, as if the file ended
+  cleanly
+- The fuzzer also copies into a section of the host byte order, which runs the conversion
+
 ## 1.0.0 - 2026-04-17
 
 Incompatible change: the writer takes pcapng options. From this release on the API and ABI
