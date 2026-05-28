@@ -295,7 +295,8 @@ static void test_invalid_interface(void)
         reader = open_mem_reader(b.buf.data, b.buf.len);
         CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
         CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_FORMAT);
-        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_FORMAT);
+        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+        CHECK_STATUS(pcw_reader_error(reader), PCW_ERR_FORMAT);
         pcw_reader_destroy(reader);
         free(idb.buf.data);
         free(b.buf.data);
@@ -865,8 +866,29 @@ static void expect_open_error(const unsigned char *data, size_t len, int expecte
     const pcw_block_t *block;
 
     CHECK_STATUS(pcw_reader_next(reader, &block), expected);
-    CHECK_STATUS(pcw_reader_next(reader, &block), expected);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    CHECK_STATUS(pcw_reader_error(reader), expected);
     pcw_reader_destroy(reader);
+}
+
+static void test_reader_error(void)
+{
+    membuf_t out = {NULL, 0, 0};
+    pcw_reader_t *reader;
+    const pcw_block_t *block;
+    int status;
+
+    CHECK_STATUS(pcw_reader_error(NULL), PCW_ERR_ARG);
+    write_simple(PCW_FORMAT_PCAPNG, PCW_LINKTYPE_USER0, PCW_TSRESOL_NANO, &out);
+    reader = open_mem_reader(out.data, out.len - 1);
+    CHECK_STATUS(pcw_reader_error(reader), PCW_OK);
+    while ((status = pcw_reader_next(reader, &block)) == PCW_OK)
+        continue;
+    CHECK_STATUS(status, PCW_END);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    CHECK_STATUS(pcw_reader_error(reader), PCW_OK);
+    pcw_reader_destroy(reader);
+    free(out.data);
 }
 
 static void test_bad_input(void)
@@ -920,7 +942,8 @@ static void expect_stream_status(pcw_read_fn read_fn, int expected)
     CHECK_STATUS(pcw_reader_create(NULL, NULL, NULL, &reader), PCW_OK);
     CHECK_STATUS(pcw_reader_open_stream(reader, read_fn, NULL), PCW_OK);
     CHECK_STATUS(pcw_reader_next(reader, &block), expected);
-    CHECK_STATUS(pcw_reader_next(reader, &block), expected);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    CHECK_STATUS(pcw_reader_error(reader), expected);
     pcw_reader_destroy(reader);
 }
 
@@ -1050,7 +1073,8 @@ static void test_interface_limit(void)
     while ((status = pcw_reader_next(reader, &block)) == PCW_OK)
         ;
     CHECK_STATUS(status, PCW_ERR_LIMIT);
-    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_ERR_LIMIT);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    CHECK_STATUS(pcw_reader_error(reader), PCW_ERR_LIMIT);
     pcw_reader_destroy(reader);
     free(b.buf.data);
 }
@@ -1227,6 +1251,7 @@ int main(void)
     test_invalid_interface();
     test_truncated();
     test_bad_input();
+    test_reader_error();
     test_read_callback_errors();
     test_limits();
     test_limit_at_end();

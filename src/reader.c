@@ -106,7 +106,7 @@ int pcw_reader_next(pcw_reader_t *reader, const pcw_block_t **out_block)
     if (!reader->opened)
         return PCW_ERR_STATE;
     if (reader->fatal != PCW_OK)
-        return reader->fatal;
+        return PCW_END;
     memset(&reader->block, 0, sizeof(reader->block));
     if (reader->format == 0)
         status = pcw_detect(reader);
@@ -127,6 +127,13 @@ uint64_t pcw_reader_offset(const pcw_reader_t *reader)
 size_t pcw_reader_trailing(const pcw_reader_t *reader)
 {
     return reader ? reader->trailing : 0;
+}
+
+int pcw_reader_error(const pcw_reader_t *reader)
+{
+    if (reader == NULL)
+        return PCW_ERR_ARG;
+    return reader->fatal == PCW_END ? PCW_OK : reader->fatal;
 }
 
 static int pcw_read_more(pcw_reader_t *reader)

@@ -145,6 +145,7 @@ PCW_API int pcw_reader_open_mem(pcw_reader_t *reader, const void *data, size_t d
 PCW_API int pcw_reader_next(pcw_reader_t *reader, const pcw_block_t **out_block);
 PCW_API uint64_t pcw_reader_offset(const pcw_reader_t *reader);
 PCW_API size_t pcw_reader_trailing(const pcw_reader_t *reader);
+PCW_API int pcw_reader_error(const pcw_reader_t *reader);
 
 PCW_API int pcw_option_next(const pcw_block_t *block, size_t *io_pos, uint16_t *out_code, const unsigned char **out_value, size_t *out_value_len);
 PCW_API int pcw_option_find(const pcw_block_t *block, uint16_t code, const unsigned char **out_value, size_t *out_value_len);

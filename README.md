@@ -65,6 +65,7 @@ while ((status = pcw_reader_next(reader, &block)) != PCW_END) {
     if (block->kind == PCW_KIND_PACKET)
         handle(block->ts_sec, block->ts_nsec, block->data, block->data_len);
 }
+status = pcw_reader_error(reader);                 /* PCW_OK, or why reading stopped */
 pcw_reader_destroy(reader);
 ```
 
@@ -125,7 +126,11 @@ in a packet's `epb_flags`. It returns `PCW_END` when the block does not say.
 
 - `PCW_ERR_FORMAT` on a block whose content is broken skips that block, and the next call
   continues; a broken file header, section header, interface block, block length or trailing
-  length stops the reader, and every later call returns the same error
+  length stops the reader. An error that stops the reader is returned once, every later call
+  returns `PCW_END`, and `pcw_reader_error` keeps it; it returns `PCW_OK` while reading goes
+  on and when the input ended cleanly or with a truncated packet. So the loop above ends on
+  any input, and checking `pcw_reader_error` after it tells a complete read from a stopped
+  one
 - a file cut in the middle of a packet returns that packet with `PCW_FLAG_TRUNCATED` and
   `data_len` set to what is there, then `PCW_END`; cut anywhere else, `PCW_END` comes at once
   and `pcw_reader_trailing` says how many bytes were left over
@@ -133,7 +138,8 @@ in a packet's `epb_flags`. It returns `PCW_END` when the block does not say.
   and a table of up to `max_interfaces` interfaces (1024). Change them with
   `pcw_reader_set_limits` before opening. A larger packet or statistics block is skipped with
   `PCW_ERR_LIMIT` and reading continues; a larger section or interface block, or too many
-  interfaces, stops the reader with `PCW_ERR_LIMIT`
+  interfaces, stops the reader with `PCW_ERR_LIMIT`. An I/O error from your callback stops it
+  with `PCW_ERR_IO`
 - in memory mode no buffer is allocated and blocks point into your data, so there is no block
   size limit
 - `pcw_reader_offset` is the input position after the last block
@@ -165,9 +171,9 @@ byte order it had.
   options the pcapng spec gives a fixed size (`if_speed`, `if_tzone`, `if_fcslen`,
   `if_txspeed`, `if_rxspeed`, `epb_flags`, `epb_dropcount`, `epb_packetid`, `epb_queue`,
   `epb_processid_threadid`) are given in host byte order and written in the file's; any other
-  option, custom ones included, is written as given. `PCW_ERR_ARG`, with nothing written, for code 0, a value over
-  65535 bytes, a fixed size option of another size, and `if_tsresol` or `if_tsoffset`, which
-  come from `ts_resol`
+  option, custom ones included, is written as given. `PCW_ERR_ARG`, with nothing written, for
+  code 0, a value over 65535 bytes, a fixed size option of another size, and `if_tsresol` or
+  `if_tsoffset`, which come from `ts_resol`
 - pcap keeps only `if_fcslen`, in the file header; it drops the other options
 - `pcw_writer_block` writes a block that a reader returned, so a copy or a conversion is a loop
   of `pcw_reader_next` and `pcw_writer_block`. pcapng to pcapng and pcap to pcap come out
@@ -187,7 +193,8 @@ byte order it had.
 ### Link types
 
 A pcap file header with any of the reserved link type bits set is rejected with
-`PCW_ERR_FORMAT`, as libpcap and Wireshark do. `PCW_LINKTYPE_*` names the ones this library is tested with: `USER0` to `USER15` (147 to 162,
+`PCW_ERR_FORMAT`, as libpcap and Wireshark do. `PCW_LINKTYPE_*` names the ones this library is
+tested with: `USER0` to `USER15` (147 to 162,
 for raw HID reports), Bluetooth HCI H4 (187, 201 with direction header), Linux usbmon (189,
 220) and USBPcap (249). Any other link type passes through unchanged.
 
