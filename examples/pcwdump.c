@@ -73,15 +73,11 @@ static void print_block(const pcw_block_t *block)
 static int dump(pcw_reader_t *reader, const options_t *opts)
 {
     const pcw_block_t *block;
-    uint64_t last_offset = UINT64_MAX;
     int status;
 
     while ((status = pcw_reader_next(reader, &block)) != PCW_END) {
         if (status != PCW_OK) {
             fprintf(stderr, "pcwdump: %s at offset %llu\n", pcw_strerror(status), (unsigned long long)pcw_reader_offset(reader));
-            if (pcw_reader_offset(reader) == last_offset)
-                return 1;
-            last_offset = pcw_reader_offset(reader);
             continue;
         }
         if (block->kind == PCW_KIND_PACKET && opts->packets_only)
@@ -91,7 +87,7 @@ static int dump(pcw_reader_t *reader, const options_t *opts)
     }
     if (pcw_reader_trailing(reader) > 0)
         fprintf(stderr, "pcwdump: %zu trailing bytes ignored\n", pcw_reader_trailing(reader));
-    return 0;
+    return pcw_reader_error(reader) != PCW_OK;
 }
 
 static unsigned char *load_file(FILE *file, size_t *out_len)

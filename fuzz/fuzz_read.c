@@ -70,7 +70,6 @@ static void walk_block(const pcw_block_t *block)
 static int drain(pcw_reader_t *reader, pcw_writer_t *writer, int skip_sections)
 {
     const pcw_block_t *block;
-    uint64_t last_error = UINT64_MAX;
     int format_errors = 0;
     int status;
     int rounds;
@@ -81,17 +80,13 @@ static int drain(pcw_reader_t *reader, pcw_writer_t *writer, int skip_sections)
             break;
         if (status == PCW_ERR_FORMAT)
             format_errors++;
-        if (status != PCW_OK && pcw_reader_offset(reader) == last_error)
-            break;
-        if (status != PCW_OK) {
-            last_error = pcw_reader_offset(reader);
+        if (status != PCW_OK)
             continue;
-        }
         walk_block(block);
         if (writer != NULL && !(skip_sections && block->kind == PCW_KIND_SECTION))
             pcw_writer_block(writer, block);
     }
-    if (rounds == 100000)
+    if (rounds == 100000 || pcw_reader_next(reader, &block) != PCW_END)
         abort();
     return format_errors;
 }
