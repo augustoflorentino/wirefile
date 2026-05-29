@@ -2,9 +2,6 @@
 
 #include <string.h>
 
-#define PCW_NAME_EUI48 3u
-#define PCW_NAME_EUI64 4u
-
 static void pcw_convert_free(pcw_writer_t *writer, void *mem)
 {
     if (mem != NULL)

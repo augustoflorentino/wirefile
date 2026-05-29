@@ -86,6 +86,8 @@ extern "C" {
 #define PCW_NAME_END 0u
 #define PCW_NAME_IPV4 1u
 #define PCW_NAME_IPV6 2u
+#define PCW_NAME_EUI48 3u
+#define PCW_NAME_EUI64 4u
 
 #define PCW_LINKTYPE_ETHERNET 1u
 #define PCW_LINKTYPE_USER0 147u
