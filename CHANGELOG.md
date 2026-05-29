@@ -4,6 +4,30 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 2.0.0 - 2026-05-29
+
+Incompatible change: an error that stops the reader is returned once. Before, every later
+call to `pcw_reader_next` returned it again, so the reading loop this README showed, which
+skips errors and stops at `PCW_END`, never ended on a file with a broken interface block or
+on an I/O error. Programs had to compare offsets between errors to get out, as `pcwdump` did.
+
+- after an error that stops it, `pcw_reader_next` returns `PCW_END`
+- `pcw_reader_error` returns the error that stopped the reader, or `PCW_OK` while reading
+  goes on and after a clean end or a truncated last packet
+- `PCW_NAME_EUI48` and `PCW_NAME_EUI64` name the other two record types of a name block
+- `pcwdump` exits with 1 when reading stopped on an error
+- soname `libwirefile.so.2`
+
+### Upgrading
+
+- a loop that skips errors and stops at `PCW_END` needs no change; it now ends on every input.
+  Call `pcw_reader_error` after it to know whether the input was read to the end
+- a loop that stopped on the second identical error, or on an error at an unchanged
+  `pcw_reader_offset`, can drop that check
+- code that called `pcw_reader_next` again after an error to see whether it repeats must call
+  `pcw_reader_error` instead: a nonzero result means the reader stopped
+- rebuild; programs linked to `libwirefile.so.1` keep using the old library
+
 ## 1.3.0 - 2026-05-28
 
 - Blocks copied from a pcapng source in the other byte order, as when merging captures made
