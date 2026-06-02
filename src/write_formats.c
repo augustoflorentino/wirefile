@@ -108,7 +108,7 @@ static int pcw_same_order(const pcw_writer_t *writer, const pcw_block_t *block)
     return block != NULL && block->format == PCW_FORMAT_PCAPNG && ((block->flags & PCW_FLAG_BIG_ENDIAN) != 0) == writer->big_endian;
 }
 
-int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block)
+int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block, const pcw_optlist_t *list)
 {
     unsigned char fixed[16];
     int copy = block != NULL && block->format == PCW_FORMAT_PCAPNG;
@@ -121,7 +121,7 @@ int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block)
     pcw_wr16(fixed + 6, copy ? block->version_minor : 0, big);
     pcw_wr64(fixed + 8, copy ? (uint64_t)block->section_len : UINT64_MAX, big);
     if (!copy)
-        return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, NULL, 0, NULL);
+        return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, NULL, 0, list);
     return pcw_write_framed(writer, PCW_BLOCK_SHB, fixed, sizeof(fixed), NULL, 0, block->options, block->options_len, NULL);
 }
 

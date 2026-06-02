@@ -796,6 +796,61 @@ static void check_converted_extras(const membuf_t *out)
     pcw_reader_destroy(reader);
 }
 
+static void write_two_sections(membuf_t *out)
+{
+    pcw_option_t first[2] = {{PCW_OPT_SHB_USERAPPL, "wirefile test", 13}, {PCW_OPT_SHB_OS, "Linux", 5}};
+    pcw_option_t second = {PCW_OPT_COMMENT, "second", 6};
+    pcw_writer_t *writer = NULL;
+    uint32_t id;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, out), PCW_OK);
+    CHECK_STATUS(pcw_writer_section(writer, first, 2), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, NULL, 0, &id), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, id, 1, 0, payload, 3, 3, NULL, 0), PCW_OK);
+    CHECK_STATUS(pcw_writer_section(writer, &second, 1), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, id, 2, 0, payload, 3, 3, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0 + 1, 0, PCW_TSRESOL_MICRO, NULL, 0, &id), PCW_OK);
+    CHECK(id == 0);
+    CHECK_STATUS(pcw_writer_packet(writer, id, 2, 0, payload, 3, 3, NULL, 0), PCW_OK);
+    pcw_writer_destroy(writer);
+}
+
+static void test_writer_sections(void)
+{
+    static const uint32_t kinds[] = {PCW_KIND_SECTION, PCW_KIND_INTERFACE, PCW_KIND_PACKET, PCW_KIND_SECTION, PCW_KIND_INTERFACE, PCW_KIND_PACKET};
+    membuf_t out = {NULL, 0, 0};
+    pcw_reader_t *reader;
+    const pcw_block_t *block;
+    pcw_writer_t *pcap = NULL;
+    size_t i;
+
+    write_two_sections(&out);
+    reader = open_mem_reader(out.data, out.len);
+    for (i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) {
+        CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+        CHECK(block->kind == kinds[i] && block->section == (i < 3 ? 0u : 1u));
+        if (i == 0)
+            CHECK(option_is(block, PCW_OPT_SHB_USERAPPL, "wirefile test", 13) && option_is(block, PCW_OPT_SHB_OS, "Linux", 5));
+        if (i == 3)
+            CHECK(option_is(block, PCW_OPT_COMMENT, "second", 6));
+        if (i == 5)
+            CHECK(block->linktype == PCW_LINKTYPE_USER0 + 1 && block->ts_sec == 2);
+    }
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    pcw_reader_destroy(reader);
+    free(out.data);
+    out = (membuf_t){NULL, 0, 0};
+    CHECK_STATUS(pcw_writer_section(NULL, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &pcap), PCW_OK);
+    CHECK_STATUS(pcw_writer_section(pcap, NULL, 0), PCW_ERR_STATE);
+    CHECK_STATUS(pcw_writer_open(pcap, PCW_FORMAT_PCAP, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_section(pcap, NULL, 0), PCW_ERR_ARG);
+    pcw_writer_destroy(pcap);
+    CHECK(out.len == 0);
+    free(out.data);
+}
+
 static void test_cross_order_copy(void)
 {
     builder_t source = big_endian_extras();
@@ -1247,6 +1302,7 @@ int main(void)
     test_writer_options_pcap();
     test_writer_bad_options();
     test_cross_order_copy();
+    test_writer_sections();
     test_pcapng_crafted();
     test_invalid_interface();
     test_truncated();

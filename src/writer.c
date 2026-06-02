@@ -78,11 +78,23 @@ static int pcw_writer_pcap_iface(pcw_writer_t *writer, const pcw_iface_t *iface)
     return pcw_write_pcap_header(writer, iface);
 }
 
-static int pcw_writer_begin_section(pcw_writer_t *writer, const pcw_block_t *block)
+static int pcw_writer_begin_section(pcw_writer_t *writer, const pcw_block_t *block, const pcw_optlist_t *list)
 {
     writer->ifaces.count = 0;
     writer->started = 1;
-    return pcw_write_shb(writer, block);
+    return pcw_write_shb(writer, block, list);
+}
+
+int pcw_writer_section(pcw_writer_t *writer, const pcw_option_t *options, size_t options_count)
+{
+    pcw_optlist_t list = {PCW_BLOCK_SHB, options, options_count};
+    int status = pcw_writer_ready(writer);
+
+    if (status != PCW_OK)
+        return status;
+    if (writer->format != PCW_FORMAT_PCAPNG || pcw_optlist_user_check(&list) != PCW_OK)
+        return PCW_ERR_ARG;
+    return pcw_writer_begin_section(writer, NULL, &list);
 }
 
 static int pcw_writer_ng_iface(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_optlist_t *list, const pcw_block_t *block)
@@ -92,7 +104,7 @@ static int pcw_writer_ng_iface(pcw_writer_t *writer, const pcw_iface_t *iface, c
     if (iface->linktype > UINT16_MAX)
         return PCW_ERR_ARG;
     if (!writer->started) {
-        status = pcw_writer_begin_section(writer, NULL);
+        status = pcw_writer_begin_section(writer, NULL, NULL);
         if (status != PCW_OK)
             return status;
     }
@@ -248,8 +260,8 @@ static int pcw_writer_ng_section(pcw_writer_t *writer, const pcw_block_t *block)
     int status;
 
     if (block->format == PCW_FORMAT_PCAPNG)
-        return pcw_writer_begin_section(writer, block);
-    status = pcw_writer_begin_section(writer, NULL);
+        return pcw_writer_begin_section(writer, block, NULL);
+    status = pcw_writer_begin_section(writer, NULL, NULL);
     if (status != PCW_OK)
         return status;
     iface.ts_offset = 0;

@@ -160,6 +160,12 @@ pcw_writer_packet(writer, iface, ts_sec, ts_nsec, data, data_len, orig_len, &dir
 pcw_writer_destroy(writer);
 ```
 
+A new pcapng capture starts its section on the first interface. Call
+`pcw_writer_section(writer, options, count)` before it to give the section options
+(`PCW_OPT_SHB_USERAPPL`, `PCW_OPT_SHB_OS`, `PCW_OPT_SHB_HARDWARE`, a comment), or later to
+start a new section: interfaces are numbered from 0 again in each one. pcap has no sections,
+so a pcap writer returns `PCW_ERR_ARG`.
+
 `my_write(ctx, data, data_len)` returns 0 on success. After one failure every writer call
 returns `PCW_ERR_IO`. A new file is written in the host byte order; a copied section keeps the
 byte order it had.

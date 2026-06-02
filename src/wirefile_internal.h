@@ -117,7 +117,7 @@ PCW_LOCAL int pcw_emit(pcw_writer_t *writer, const void *data, size_t data_len);
 PCW_LOCAL int pcw_emit_zeros(pcw_writer_t *writer, size_t len);
 PCW_LOCAL int pcw_write_pcap_header(pcw_writer_t *writer, const pcw_iface_t *iface);
 PCW_LOCAL int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned char *data, size_t data_len, uint64_t orig_len);
-PCW_LOCAL int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block);
+PCW_LOCAL int pcw_write_shb(pcw_writer_t *writer, const pcw_block_t *block, const pcw_optlist_t *list);
 PCW_LOCAL int pcw_write_idb(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_optlist_t *list, const pcw_block_t *block);
 PCW_LOCAL int pcw_write_epb(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const pcw_block_t *block, const pcw_optlist_t *list);
 PCW_LOCAL int pcw_write_spb(pcw_writer_t *writer, const pcw_block_t *block);
