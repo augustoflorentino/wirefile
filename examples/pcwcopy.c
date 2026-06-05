@@ -17,14 +17,23 @@ static int file_write(void *ctx, const unsigned char *data, size_t data_len)
 static int copy_blocks(pcw_reader_t *reader, pcw_writer_t *writer)
 {
     const pcw_block_t *block;
+    int skipped = 0;
     int status;
 
-    while ((status = pcw_reader_next(reader, &block)) == PCW_OK) {
+    while ((status = pcw_reader_next(reader, &block)) != PCW_END) {
+        if (status != PCW_OK) {
+            fprintf(stderr, "pcwcopy: %s at offset %llu, block skipped\n", pcw_strerror(status), (unsigned long long)pcw_reader_offset(reader));
+            skipped = 1;
+            continue;
+        }
         status = pcw_writer_block(writer, block);
         if (status != PCW_OK)
             return status;
     }
-    return status == PCW_END ? PCW_OK : status;
+    status = pcw_reader_error(reader);
+    if (status == PCW_OK && skipped)
+        status = PCW_ERR_FORMAT;
+    return status;
 }
 
 static int copy_file(FILE *in, FILE *out, uint32_t format)
