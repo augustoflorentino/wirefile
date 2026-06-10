@@ -125,8 +125,11 @@ static void copy_mem(const uint8_t *data, size_t size, uint32_t format, int own_
     if (pcw_reader_create(NULL, NULL, NULL, &reader) == PCW_OK && pcw_writer_create(NULL, NULL, NULL, &writer) == PCW_OK) {
         pcw_reader_open_mem(reader, data, size);
         pcw_writer_open(writer, format, sink_write, &sink);
-        if (own_section)
+        if (own_section) {
+            pcw_option_t appl = {PCW_OPT_SHB_USERAPPL, "fuzz", 4};
+            pcw_writer_section(writer, &appl, 1);
             pcw_writer_add_interface(writer, 147, 0, 9, NULL, 0, NULL);
+        }
         drain(reader, writer, own_section);
         reread(&sink);
     }
