@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use wirefile in academic work, please cite it."
+type: software
+title: wirefile
+abstract: "C99 library that reads and writes pcap and pcapng capture files as a stream"
+authors:
+  - family-names: Florentino
+    given-names: Augusto
+license: MIT
+repository-code: "https://github.com/augustoflorentino/wirefile"
+keywords:
+  - c
+  - c99
+  - library
+  - pcap
+  - pcapng
+  - wireshark
+  - packet-capture
+  - network
