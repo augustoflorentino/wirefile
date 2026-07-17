@@ -1,6 +1,14 @@
 # wirefile
 
-Read and write pcap and pcapng capture files, the formats Wireshark opens. Streaming reader with bounded memory, no stdio required.
+> Read and write pcap and pcapng capture files, the formats Wireshark opens. Streaming reader
+> with bounded memory, no stdio required.
+
+[Releases](https://github.com/augustoflorentino/wirefile/releases) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dump-dark.svg">
+  <img src="docs/images/dump-light.svg" alt="Hexdump of the 192-byte pcapng file written by examples/basic.c, with the section header, the interface block and three packet blocks marked" width="728">
+</picture>
 
 ## Build and install
 
