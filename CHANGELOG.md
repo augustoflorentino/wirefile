@@ -4,6 +4,16 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 2.1.1 - 2026-07-17
+
+- `pcw_writer_section` starts a pcapng section with options of its own, such as
+  `shb_userappl`, `shb_os` and `shb_hardware`, which a new capture could not have before, so
+  tools showed nothing for the application that wrote it. Called again, it starts a new
+  section in the same file, with its interfaces numbered from 0
+- `pcwcopy` skips a broken or oversized block with a message and copies the rest; before, the
+  first one stopped the copy and left the output cut there. It still exits with 1 when a
+  block was skipped or reading stopped on an error
+
 ## 2.0.0 - 2026-05-29
 
 Incompatible change: an error that stops the reader is returned once. Before, every later
