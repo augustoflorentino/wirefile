@@ -79,6 +79,9 @@ struct pcw_writer {
     int status;
     uint64_t offset;
     pcw_iface_table_t ifaces;
+    unsigned char *buf;
+    size_t buf_len;
+    size_t buf_cap;
 };
 
 PCW_LOCAL int pcw_mem_init(pcw_mem_t *mem, pcw_alloc_fn alloc_fn, pcw_free_fn free_fn, void *ctx);
@@ -114,6 +117,10 @@ PCW_LOCAL int pcw_read_pcap_record(pcw_reader_t *reader);
 PCW_LOCAL int pcw_read_pcapng_block(pcw_reader_t *reader);
 
 PCW_LOCAL int pcw_emit(pcw_writer_t *writer, const void *data, size_t data_len);
+PCW_LOCAL int pcw_block_begin(pcw_writer_t *writer, uint64_t total);
+PCW_LOCAL int pcw_block_end(pcw_writer_t *writer, int status);
+PCW_LOCAL void pcw_block_free(pcw_writer_t *writer);
+PCW_LOCAL int pcw_write_whole(pcw_writer_t *writer, const void *data, size_t data_len);
 PCW_LOCAL int pcw_emit_zeros(pcw_writer_t *writer, size_t len);
 PCW_LOCAL int pcw_write_pcap_header(pcw_writer_t *writer, const pcw_iface_t *iface);
 PCW_LOCAL int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned char *data, size_t data_len, uint64_t orig_len);

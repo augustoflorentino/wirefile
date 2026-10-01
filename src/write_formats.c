@@ -5,16 +5,54 @@
 #define PCW_PCAP_VERSION_MAJOR 2u
 #define PCW_PCAP_VERSION_MINOR 4u
 #define PCW_ZEROS_LEN 64u
+#define PCW_KEEP_BUF (1u << 20)
+
+void pcw_block_free(pcw_writer_t *writer)
+{
+    if (writer->buf != NULL)
+        writer->mem.free_fn(writer->mem.ctx, writer->buf);
+    writer->buf = NULL;
+    writer->buf_len = 0;
+    writer->buf_cap = 0;
+}
+
+int pcw_block_begin(pcw_writer_t *writer, uint64_t total)
+{
+    writer->buf_len = 0;
+    if (total <= writer->buf_cap)
+        return PCW_OK;
+    if (total > SIZE_MAX)
+        return PCW_ERR_NOMEM;
+    pcw_block_free(writer);
+    writer->buf = writer->mem.alloc_fn(writer->mem.ctx, (size_t)total);
+    if (writer->buf == NULL)
+        return PCW_ERR_NOMEM;
+    writer->buf_cap = (size_t)total;
+    return PCW_OK;
+}
+
+int pcw_block_end(pcw_writer_t *writer, int status)
+{
+    size_t len = writer->buf_len;
+
+    writer->buf_len = 0;
+    if (status == PCW_OK && len > 0 && writer->write_fn(writer->write_ctx, writer->buf, len) != 0)
+        status = writer->status = PCW_ERR_IO;
+    if (status == PCW_OK)
+        writer->offset += len;
+    if (writer->buf_cap > PCW_KEEP_BUF)
+        pcw_block_free(writer);
+    return status;
+}
 
 int pcw_emit(pcw_writer_t *writer, const void *data, size_t data_len)
 {
     if (data_len == 0)
         return PCW_OK;
-    if (writer->write_fn(writer->write_ctx, data, data_len) != 0) {
-        writer->status = PCW_ERR_IO;
-        return PCW_ERR_IO;
-    }
-    writer->offset += data_len;
+    if (data_len > writer->buf_cap - writer->buf_len)
+        return PCW_ERR_ARG;
+    memcpy(writer->buf + writer->buf_len, data, data_len);
+    writer->buf_len += data_len;
     return PCW_OK;
 }
 
@@ -30,6 +68,15 @@ int pcw_emit_zeros(pcw_writer_t *writer, size_t len)
         len -= take;
     }
     return status;
+}
+
+int pcw_write_whole(pcw_writer_t *writer, const void *data, size_t data_len)
+{
+    int status = pcw_block_begin(writer, data_len);
+
+    if (status == PCW_OK)
+        status = pcw_emit(writer, data, data_len);
+    return pcw_block_end(writer, status);
 }
 
 static uint32_t pcw_pcap_linktype_field(const pcw_iface_t *iface)
@@ -49,7 +96,7 @@ int pcw_write_pcap_header(pcw_writer_t *writer, const pcw_iface_t *iface)
     pcw_wr16(header + 6, PCW_PCAP_VERSION_MINOR, big);
     pcw_wr32(header + 16, iface->snaplen, big);
     pcw_wr32(header + 20, pcw_pcap_linktype_field(iface), big);
-    return pcw_emit(writer, header, sizeof(header));
+    return pcw_write_whole(writer, header, sizeof(header));
 }
 
 int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned char *data, size_t data_len, uint64_t orig_len)
@@ -65,10 +112,12 @@ int pcw_write_pcap_record(pcw_writer_t *writer, uint64_t units, const unsigned c
     pcw_wr32(header + 4, (uint32_t)(units % scale), big);
     pcw_wr32(header + 8, (uint32_t)data_len, big);
     pcw_wr32(header + 12, (uint32_t)orig_len, big);
-    status = pcw_emit(writer, header, sizeof(header));
+    status = pcw_block_begin(writer, (uint64_t)sizeof(header) + data_len);
+    if (status == PCW_OK)
+        status = pcw_emit(writer, header, sizeof(header));
     if (status == PCW_OK)
         status = pcw_emit(writer, data, data_len);
-    return status;
+    return pcw_block_end(writer, status);
 }
 
 static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned char *fixed, size_t fixed_len, const unsigned char *data, size_t data_len, const unsigned char *opts, size_t opts_len, const pcw_optlist_t *list)
@@ -85,7 +134,9 @@ static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned 
         return PCW_ERR_ARG;
     pcw_wr32(word, type, writer->big_endian);
     pcw_wr32(word + 4, (uint32_t)total, writer->big_endian);
-    status = pcw_emit(writer, word, 8);
+    status = pcw_block_begin(writer, total);
+    if (status == PCW_OK)
+        status = pcw_emit(writer, word, 8);
     if (status == PCW_OK)
         status = pcw_emit(writer, fixed, fixed_len);
     if (status == PCW_OK)
@@ -100,7 +151,7 @@ static int pcw_write_framed(pcw_writer_t *writer, uint32_t type, const unsigned 
         status = pcw_optlist_emit(writer, list);
     if (status == PCW_OK)
         status = pcw_emit(writer, word + 4, 4);
-    return status;
+    return pcw_block_end(writer, status);
 }
 
 static int pcw_same_order(const pcw_writer_t *writer, const pcw_block_t *block)

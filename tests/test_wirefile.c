@@ -1232,6 +1232,40 @@ static void free_fn_only(void *ctx, void *ptr)
     (void)ptr;
 }
 
+typedef struct {
+    membuf_t out;
+    int calls;
+    int whole;
+} block_sink_t;
+
+static int block_sink_write(void *ctx, const unsigned char *data, size_t data_len)
+{
+    block_sink_t *sink = ctx;
+
+    sink->calls++;
+    sink->whole += data_len >= 12 && memcmp(data + 4, data + data_len - 4, 4) == 0 && (pcw_get_u32(NULL, data + 4) == data_len || data[4] == 0);
+    return membuf_write(&sink->out, data, data_len);
+}
+
+static void test_block_writes(void)
+{
+    static unsigned char big[3000];
+    block_sink_t sink = {{NULL, 0, 0}, 0, 0};
+    pcw_option_t comment = {PCW_OPT_COMMENT, "one call", 8};
+    pcw_writer_t *writer = NULL;
+    uint32_t id;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, block_sink_write, &sink), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_NANO, NULL, 0, &id), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, id, 1, 0, payload, 3, 3, &comment, 1), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet(writer, id, 2, 0, big, sizeof(big), sizeof(big), NULL, 0), PCW_OK);
+    CHECK(pcw_writer_offset(writer) == sink.out.len);
+    pcw_writer_destroy(writer);
+    CHECK(sink.calls == 4 && sink.whole == 4);
+    free(sink.out.data);
+}
+
 static int alloc_write(alloc_state_t *state, membuf_t *out)
 {
     static const pcw_option_t if_name = {PCW_OPT_IF_NAME, "hid", 3};
@@ -1315,6 +1349,7 @@ int main(void)
     test_interface_limit();
     test_writer_errors();
     test_alloc_failure();
+    test_block_writes();
     printf("wirefile: all tests passed\n");
     return 0;
 }

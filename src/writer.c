@@ -27,6 +27,7 @@ void pcw_writer_destroy(pcw_writer_t *writer)
     if (writer == NULL)
         return;
     pcw_iface_free(&writer->mem, &writer->ifaces);
+    pcw_block_free(writer);
     writer->mem.free_fn(writer->mem.ctx, writer);
 }
 
@@ -74,15 +75,29 @@ static int pcw_writer_pcap_iface(pcw_writer_t *writer, const pcw_iface_t *iface)
     status = pcw_iface_add(&writer->mem, &writer->ifaces, iface);
     if (status != PCW_OK)
         return status;
-    writer->started = 1;
-    return pcw_write_pcap_header(writer, iface);
+    status = pcw_write_pcap_header(writer, iface);
+    if (status == PCW_OK)
+        writer->started = 1;
+    else
+        writer->ifaces.count = 0;
+    return status;
+}
+
+static int pcw_iface_undo(pcw_writer_t *writer, int status)
+{
+    if (status != PCW_OK)
+        writer->ifaces.count--;
+    return status;
 }
 
 static int pcw_writer_begin_section(pcw_writer_t *writer, const pcw_block_t *block, const pcw_optlist_t *list)
 {
+    int status;
+
     writer->ifaces.count = 0;
-    writer->started = 1;
-    return pcw_write_shb(writer, block, list);
+    status = pcw_write_shb(writer, block, list);
+    writer->started = status == PCW_OK;
+    return status;
 }
 
 int pcw_writer_section(pcw_writer_t *writer, const pcw_option_t *options, size_t options_count)
@@ -111,7 +126,7 @@ static int pcw_writer_ng_iface(pcw_writer_t *writer, const pcw_iface_t *iface, c
     status = pcw_iface_add(&writer->mem, &writer->ifaces, iface);
     if (status != PCW_OK)
         return status;
-    return pcw_write_idb(writer, iface, list, block);
+    return pcw_iface_undo(writer, pcw_write_idb(writer, iface, list, block));
 }
 
 static int pcw_writer_ng_iface_converted(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_block_t *block)
@@ -123,7 +138,7 @@ static int pcw_writer_ng_iface_converted(pcw_writer_t *writer, const pcw_iface_t
     status = pcw_iface_add(&writer->mem, &writer->ifaces, iface);
     if (status != PCW_OK)
         return status;
-    return pcw_write_idb_converted(writer, iface, block);
+    return pcw_iface_undo(writer, pcw_write_idb_converted(writer, iface, block));
 }
 
 static int pcw_writer_ng_copy_iface(pcw_writer_t *writer, const pcw_iface_t *iface, const pcw_block_t *block)
@@ -250,8 +265,12 @@ static int pcw_writer_pcap_section(pcw_writer_t *writer, const pcw_block_t *bloc
     if (status != PCW_OK)
         return status;
     writer->big_endian = (block->flags & PCW_FLAG_BIG_ENDIAN) != 0;
-    writer->started = 1;
-    return pcw_emit(writer, block->body, block->body_len);
+    status = pcw_write_whole(writer, block->body, block->body_len);
+    if (status == PCW_OK)
+        writer->started = 1;
+    else
+        writer->ifaces.count = 0;
+    return status;
 }
 
 static int pcw_writer_ng_section(pcw_writer_t *writer, const pcw_block_t *block)
