@@ -178,9 +178,29 @@ int pcw_writer_add_interface(pcw_writer_t *writer, uint32_t linktype, uint32_t s
     return status;
 }
 
+static int pcw_raw_time_current(const pcw_block_t *block)
+{
+    int64_t sec;
+    uint32_t nsec;
+
+    if (block->flags & PCW_FLAG_NO_TIMESTAMP)
+        return 1;
+    pcw_ts_split(block->ts_raw, block->ts_resol, block->ts_offset, &sec, &nsec);
+    return sec == block->ts_sec && nsec == block->ts_nsec;
+}
+
+static int pcw_raw_pb_current(const pcw_block_t *block)
+{
+    int big = (block->flags & PCW_FLAG_BIG_ENDIAN) != 0;
+
+    if (block->body == NULL || block->body_len < 20 || block->data != block->body + 20 || !pcw_raw_time_current(block))
+        return 0;
+    return block->data_len == pcw_rd32(block->body + 12, big) && block->orig_len == pcw_rd32(block->body + 16, big);
+}
+
 int pcw_writer_units(const pcw_iface_t *iface, const pcw_block_t *block, uint64_t *out_units)
 {
-    if (block->format != 0 && block->ts_resol == iface->ts_resol && block->ts_offset == iface->ts_offset) {
+    if (block->format != 0 && block->ts_resol == iface->ts_resol && block->ts_offset == iface->ts_offset && pcw_raw_time_current(block)) {
         *out_units = block->ts_raw;
         return PCW_OK;
     }
@@ -194,7 +214,7 @@ static int pcw_writer_ng_packet(pcw_writer_t *writer, uint32_t interface_id, uin
 
     if (block->format == PCW_FORMAT_PCAPNG && block->type == PCW_BLOCK_SPB && interface_id == 0)
         return pcw_write_spb(writer, block);
-    if (block->type == PCW_BLOCK_PB && same_order && !truncated)
+    if (block->type == PCW_BLOCK_PB && same_order && !truncated && pcw_raw_pb_current(block))
         return pcw_write_raw(writer, PCW_BLOCK_PB, block->body, block->body_len);
     if (block->format == PCW_FORMAT_PCAPNG && !same_order && !truncated)
         return pcw_write_epb_converted(writer, interface_id, units, block);
@@ -277,6 +297,15 @@ static pcw_iface_t pcw_iface_of(const pcw_block_t *block)
     return iface;
 }
 
+static int pcw_raw_pcap_header_current(const pcw_block_t *block)
+{
+    int big = (block->flags & PCW_FLAG_BIG_ENDIAN) != 0;
+
+    if (block->body == NULL || block->body_len != PCW_PCAP_HEADER_LEN)
+        return 0;
+    return block->snaplen == pcw_rd32(block->body + 16, big) && block->linktype == (pcw_rd32(block->body + 20, big) & 0xFFFFu);
+}
+
 static int pcw_writer_pcap_section(pcw_writer_t *writer, const pcw_block_t *block)
 {
     pcw_iface_t iface = pcw_iface_of(block);
@@ -286,7 +315,7 @@ static int pcw_writer_pcap_section(pcw_writer_t *writer, const pcw_block_t *bloc
         return PCW_OK;
     if (writer->started)
         return PCW_ERR_STATE;
-    if (block->body == NULL || block->body_len != PCW_PCAP_HEADER_LEN || !pcw_pcap_resol(iface.ts_resol))
+    if (!pcw_raw_pcap_header_current(block) || !pcw_pcap_resol(iface.ts_resol))
         return pcw_writer_pcap_iface(writer, &iface);
     status = pcw_iface_add(&writer->mem, &writer->ifaces, &iface);
     if (status != PCW_OK)

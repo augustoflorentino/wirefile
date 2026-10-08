@@ -816,6 +816,63 @@ static void write_two_sections(membuf_t *out)
     pcw_writer_destroy(writer);
 }
 
+static void copy_edited(uint32_t format, membuf_t *in, membuf_t *out)
+{
+    static const unsigned char other[2] = {0xAB, 0xCD};
+    pcw_reader_t *reader = open_mem_reader(in->data, in->len);
+    pcw_writer_t *writer = NULL;
+    const pcw_block_t *block;
+    pcw_block_t copy;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, format, membuf_write, out), PCW_OK);
+    while (pcw_reader_next(reader, &block) == PCW_OK) {
+        copy = *block;
+        if (copy.kind == PCW_KIND_PACKET) {
+            copy.ts_sec += 3600;
+            copy.data = other;
+            copy.data_len = copy.orig_len = sizeof(other);
+        }
+        if (copy.kind == PCW_KIND_SECTION || copy.kind == PCW_KIND_INTERFACE)
+            copy.snaplen = 1500;
+        CHECK_STATUS(pcw_writer_block(writer, &copy), PCW_OK);
+    }
+    pcw_writer_destroy(writer);
+    pcw_reader_destroy(reader);
+}
+
+static void test_write_edited_copy(void)
+{
+    uint32_t format;
+
+    for (format = PCW_FORMAT_PCAP; format <= PCW_FORMAT_PCAPNG; format++) {
+        membuf_t in = {NULL, 0, 0};
+        membuf_t out = {NULL, 0, 0};
+        pcw_reader_t *original;
+        pcw_reader_t *edited;
+        const pcw_block_t *a;
+        const pcw_block_t *b;
+
+        write_simple(format, PCW_LINKTYPE_USER0, PCW_TSRESOL_MICRO, &in);
+        copy_edited(format, &in, &out);
+        original = open_mem_reader(in.data, in.len);
+        edited = open_mem_reader(out.data, out.len);
+        while (pcw_reader_next(original, &a) == PCW_OK) {
+            CHECK_STATUS(pcw_reader_next(edited, &b), PCW_OK);
+            CHECK(a->kind == b->kind);
+            if (a->kind == PCW_KIND_PACKET)
+                CHECK(b->ts_sec == a->ts_sec + 3600 && b->ts_nsec == a->ts_nsec && b->data_len == 2 && b->data[0] == 0xAB);
+            else if (a->kind != PCW_KIND_SECTION || format == PCW_FORMAT_PCAP)
+                CHECK(b->snaplen == 1500);
+        }
+        CHECK_STATUS(pcw_reader_next(edited, &b), PCW_END);
+        pcw_reader_destroy(edited);
+        pcw_reader_destroy(original);
+        free(in.data);
+        free(out.data);
+    }
+}
+
 static void test_writer_units(void)
 {
     membuf_t out = {NULL, 0, 0};
@@ -1379,6 +1436,7 @@ int main(void)
     test_cross_order_copy();
     test_writer_sections();
     test_writer_units();
+    test_write_edited_copy();
     test_pcapng_crafted();
     test_invalid_interface();
     test_truncated();

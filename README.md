@@ -206,6 +206,9 @@ byte order it had.
   name records and blocks of unknown types, `epb_verdict`, and custom blocks are dropped,
   since their bytes cannot be reordered without knowing them. Statistics keep `isb_starttime`
   and `isb_endtime` only when the interface had no `if_tsoffset`
+- to change a block on the way, copy it (`pcw_block_t copy = *block;`), edit the copy (time,
+  data, lengths, link type, snaplen) and pass the copy: the writer rebuilds what you changed
+  instead of copying the stored bytes
 - `pcw_writer_offset` is the number of bytes written so far
 
 ### Link types
