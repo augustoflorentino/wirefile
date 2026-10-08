@@ -163,6 +163,7 @@ PCW_API int pcw_writer_open(pcw_writer_t *writer, uint32_t format, pcw_write_fn 
 PCW_API int pcw_writer_section(pcw_writer_t *writer, const pcw_option_t *options, size_t options_count);
 PCW_API int pcw_writer_add_interface(pcw_writer_t *writer, uint32_t linktype, uint32_t snaplen, uint32_t ts_resol, const pcw_option_t *options, size_t options_count, uint32_t *out_interface_id);
 PCW_API int pcw_writer_packet(pcw_writer_t *writer, uint32_t interface_id, int64_t ts_sec, uint32_t ts_nsec, const void *data, size_t data_len, uint64_t orig_len, const pcw_option_t *options, size_t options_count);
+PCW_API int pcw_writer_packet_units(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const void *data, size_t data_len, uint64_t orig_len, const pcw_option_t *options, size_t options_count);
 PCW_API int pcw_writer_block(pcw_writer_t *writer, const pcw_block_t *block);
 PCW_API uint64_t pcw_writer_offset(const pcw_writer_t *writer);
 

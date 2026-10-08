@@ -816,6 +816,47 @@ static void write_two_sections(membuf_t *out)
     pcw_writer_destroy(writer);
 }
 
+static void test_writer_units(void)
+{
+    membuf_t out = {NULL, 0, 0};
+    pcw_writer_t *writer = NULL;
+    pcw_reader_t *reader;
+    const pcw_block_t *block;
+    uint32_t pico;
+    uint32_t binary;
+
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAPNG, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, 12, NULL, 0, &pico), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, 0x80u | 40u, NULL, 0, &binary), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet_units(writer, pico, 1000000000123ull, payload, 3, 3, NULL, 0), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet_units(writer, binary, (3ull << 40) + 1, payload, 3, 3, NULL, 0), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet_units(writer, 2, 1, payload, 3, 3, NULL, 0), PCW_ERR_ARG);
+    CHECK_STATUS(pcw_writer_packet_units(writer, pico, 1, payload, 3, 2, NULL, 0), PCW_ERR_ARG);
+    pcw_writer_destroy(writer);
+    reader = open_mem_reader(out.data, out.len);
+    while (pcw_reader_next(reader, &block) == PCW_OK && block->kind != PCW_KIND_PACKET)
+        continue;
+    CHECK(block->ts_raw == 1000000000123ull && block->ts_sec == 1 && block->ts_nsec == 0 && block->ts_resol == 12);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->ts_raw == (3ull << 40) + 1 && block->ts_sec == 3 && block->interface_id == binary);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_END);
+    pcw_reader_destroy(reader);
+    free(out.data);
+    out = (membuf_t){NULL, 0, 0};
+    CHECK_STATUS(pcw_writer_create(NULL, NULL, NULL, &writer), PCW_OK);
+    CHECK_STATUS(pcw_writer_open(writer, PCW_FORMAT_PCAP, membuf_write, &out), PCW_OK);
+    CHECK_STATUS(pcw_writer_add_interface(writer, PCW_LINKTYPE_USER0, 0, PCW_TSRESOL_MICRO, NULL, 0, &pico), PCW_OK);
+    CHECK_STATUS(pcw_writer_packet_units(writer, pico, 1500000, payload, 3, 3, NULL, 0), PCW_OK);
+    pcw_writer_destroy(writer);
+    reader = open_mem_reader(out.data, out.len);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK_STATUS(pcw_reader_next(reader, &block), PCW_OK);
+    CHECK(block->ts_sec == 1 && block->ts_nsec == 500000000);
+    pcw_reader_destroy(reader);
+    free(out.data);
+}
+
 static void test_writer_sections(void)
 {
     static const uint32_t kinds[] = {PCW_KIND_SECTION, PCW_KIND_INTERFACE, PCW_KIND_PACKET, PCW_KIND_SECTION, PCW_KIND_INTERFACE, PCW_KIND_PACKET};
@@ -1337,6 +1378,7 @@ int main(void)
     test_writer_bad_options();
     test_cross_order_copy();
     test_writer_sections();
+    test_writer_units();
     test_pcapng_crafted();
     test_invalid_interface();
     test_truncated();

@@ -201,6 +201,17 @@ static int pcw_writer_ng_packet(pcw_writer_t *writer, uint32_t interface_id, uin
     return pcw_write_epb(writer, interface_id, units, block, list);
 }
 
+static int pcw_writer_put_units(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const pcw_block_t *block, const pcw_optlist_t *list)
+{
+    if (pcw_iface_get(&writer->ifaces, interface_id) == NULL)
+        return PCW_ERR_ARG;
+    if (block->data == NULL && block->data_len > 0)
+        return PCW_ERR_ARG;
+    if (writer->format == PCW_FORMAT_PCAP)
+        return pcw_write_pcap_record(writer, units, block->data, block->data_len, block->orig_len);
+    return pcw_writer_ng_packet(writer, interface_id, units, block, list);
+}
+
 static int pcw_writer_put_packet(pcw_writer_t *writer, uint32_t interface_id, const pcw_block_t *block, const pcw_optlist_t *list)
 {
     const pcw_iface_t *iface = pcw_iface_get(&writer->ifaces, interface_id);
@@ -209,32 +220,48 @@ static int pcw_writer_put_packet(pcw_writer_t *writer, uint32_t interface_id, co
 
     if (iface == NULL)
         return PCW_ERR_ARG;
-    if (block->data == NULL && block->data_len > 0)
-        return PCW_ERR_ARG;
     status = pcw_writer_units(iface, block, &units);
     if (status != PCW_OK)
         return status;
-    if (writer->format == PCW_FORMAT_PCAP)
-        return pcw_write_pcap_record(writer, units, block->data, block->data_len, block->orig_len);
-    return pcw_writer_ng_packet(writer, interface_id, units, block, list);
+    return pcw_writer_put_units(writer, interface_id, units, block, list);
+}
+
+static int pcw_writer_user_packet(pcw_writer_t *writer, pcw_block_t *block, const void *data, size_t data_len, uint64_t orig_len, const pcw_optlist_t *list)
+{
+    int status = pcw_writer_ready(writer);
+
+    if (status != PCW_OK)
+        return status;
+    if (orig_len < data_len || pcw_optlist_user_check(list) != PCW_OK)
+        return PCW_ERR_ARG;
+    block->kind = PCW_KIND_PACKET;
+    block->data = data;
+    block->data_len = data_len;
+    block->orig_len = orig_len;
+    return PCW_OK;
+}
+
+int pcw_writer_packet_units(pcw_writer_t *writer, uint32_t interface_id, uint64_t units, const void *data, size_t data_len, uint64_t orig_len, const pcw_option_t *options, size_t options_count)
+{
+    pcw_optlist_t list = {PCW_BLOCK_EPB, options, options_count};
+    pcw_block_t block = {0};
+    int status = pcw_writer_user_packet(writer, &block, data, data_len, orig_len, &list);
+
+    if (status != PCW_OK)
+        return status;
+    return pcw_writer_put_units(writer, interface_id, units, &block, &list);
 }
 
 int pcw_writer_packet(pcw_writer_t *writer, uint32_t interface_id, int64_t ts_sec, uint32_t ts_nsec, const void *data, size_t data_len, uint64_t orig_len, const pcw_option_t *options, size_t options_count)
 {
     pcw_optlist_t list = {PCW_BLOCK_EPB, options, options_count};
     pcw_block_t block = {0};
-    int status = pcw_writer_ready(writer);
+    int status = pcw_writer_user_packet(writer, &block, data, data_len, orig_len, &list);
 
     if (status != PCW_OK)
         return status;
-    if (orig_len < data_len || pcw_optlist_user_check(&list) != PCW_OK)
-        return PCW_ERR_ARG;
-    block.kind = PCW_KIND_PACKET;
     block.ts_sec = ts_sec;
     block.ts_nsec = ts_nsec;
-    block.data = data;
-    block.data_len = data_len;
-    block.orig_len = orig_len;
     return pcw_writer_put_packet(writer, interface_id, &block, &list);
 }
 

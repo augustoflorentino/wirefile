@@ -179,7 +179,11 @@ returns `PCW_ERR_IO`. A new file is written in the host byte order; a copied sec
 byte order it had.
 
 - the timestamp is stored in the interface resolution, truncated, not rounded; pcap accepts
-  only micro and nano and one interface
+  only micro and nano and one interface. For an interface finer than a nanosecond, or a
+  binary one, `pcw_writer_packet_units` takes the time as a count of the interface's units
+  since 1970 (picoseconds for `ts_resol` 12), written as given
+- each block goes to `my_write` in one call, so a writer error never stops between two parts
+  of a block; the writer keeps a buffer as large as the largest block, released past 1 MiB
 - `snaplen` is optional (0)
 - options are a list of `{code, value, value_len}`, or `NULL, 0` for none. The numbers of the
   options the pcapng spec gives a fixed size (`if_speed`, `if_tzone`, `if_fcslen`,
