@@ -4,6 +4,20 @@ Each release lists what changed, what updating means for existing code, and ever
 
 ## Unreleased
 
+## 2.2.0 - 2026-10-26
+
+- `pcw_writer_packet_units` takes a packet time as a count of the interface's units, so a
+  capture with picosecond or binary resolution keeps times finer than a nanosecond, which
+  `pcw_writer_packet` cannot express
+- the writer hands each block to the write callback in one call. Before, a block went out in
+  four to eight pieces, so a sink that failed or was cut in between left part of a block in
+  the file. The writer now keeps a buffer as large as the largest block, released past 1 MiB,
+  and a block that cannot be built returns `PCW_ERR_NOMEM` with nothing written and the
+  writer still usable
+- `pcw_writer_block` with an edited copy of a block now writes the edits. Before, a copied
+  packet kept its stored time when only `ts_sec` or `ts_nsec` changed, an old style packet
+  block kept its stored bytes, and a pcap file header kept its stored link type and snaplen
+
 ## 2.1.1 - 2026-07-17
 
 - `pcw_writer_section` starts a pcapng section with options of its own, such as
